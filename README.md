@@ -1,4 +1,4 @@
-# Useless Projects Game
+# Simple Asteroid 2d game. 
 
 A small pixel-art space shooter prototype built with JavaScript and PixiJS.
 
