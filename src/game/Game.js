@@ -5,6 +5,7 @@ import { Alien, GoldenAlien } from "../entities/Alien.js";
 import { Bullet } from "../entities/Bullet.js";
 import { SoundManager } from "./SoundManager.js";
 import { HUD } from "./HUD.js";
+import { voice } from "../services/voice.js";
 
 // Visual asset imports
 import shipImg from "../assets/MeduimQualityAssets/MeduimQualityAssets/SpaceShip(256px).png";
@@ -21,6 +22,9 @@ export class Game {
         this.input = new Input();
         this.soundManager = new SoundManager();
         this.hud = null;
+        this.active = true;
+        this.onLevelComplete = null;
+
 
         // Texture storage
         this.textures = {
@@ -726,17 +730,42 @@ export class Game {
             this.removeBullet(bullet);
         }
 
-        // Hook for future Level 2 transition
+        // Trigger voice commentary for level 1 complete
+        voice.commentate("LEVEL1_COMPLETE");
+
+        // Hook for Level 2 transition
         this.startLevel2();
     }
 
     // Clear hook where Level 2 or cutscene can be started
     startLevel2() {
-        // Placeholder hook for Level 2
+        if (typeof this.onLevelComplete === "function") {
+            setTimeout(() => {
+                this.onLevelComplete();
+            }, 1800);
+        }
+    }
+
+    hide() {
+        this.active = false;
+        this.world.visible = false;
+        if (this.hud) this.hud.container.visible = false;
+        if (this.crosshair) this.crosshair.visible = false;
+        this.levelCompleteText.visible = false;
+        this.gameOverText.visible = false;
+    }
+
+    show() {
+        this.active = true;
+        this.world.visible = true;
+        if (this.hud) this.hud.container.visible = true;
+        if (this.crosshair) this.crosshair.visible = true;
     }
 
     // Game logic update method, called every frame by the ticker
     update(deltaTime) {
+        if (!this.active) return;
+
         // Restart game
         if (this.gameOver) {
             if (this.input.wasPressed("r")) {
@@ -749,6 +778,7 @@ export class Game {
         if (this.levelComplete) {
             return;
         }
+
 
         // Subtle background stars drift
         if (this.bgSprite) {

@@ -69,20 +69,25 @@ export class Player {
         // Movement = speed * Time
         const movement = this.speed * deltaTime;
 
-        // Move player based on input (WASD + Arrow keys supported)
-        if (input.isDown("w") || input.isDown("W") || input.isDown("ArrowUp")) {
-            this.sprite.y -= movement; // up
+        // Player 1 Level 1 specific controls:
+        // W = forward/up
+        // A = left
+        // ArrowDown = down
+        // ArrowRight = right
+        // Note: ArrowLeft is explicitly excluded from this layout.
+        if (input.isDown("w") || input.isDown("W")) {
+            this.sprite.y -= movement; // forward / up
         }
 
-        if (input.isDown("s") || input.isDown("S") || input.isDown("ArrowDown")) {
+        if (input.isDown("ArrowDown")) {
             this.sprite.y += movement; // down
         }
 
-        if (input.isDown("a") || input.isDown("A") || input.isDown("ArrowLeft")) {
+        if (input.isDown("a") || input.isDown("A")) {
             this.sprite.x -= movement; // left
         }
 
-        if (input.isDown("d") || input.isDown("D") || input.isDown("ArrowRight")) {
+        if (input.isDown("ArrowRight")) {
             this.sprite.x += movement; // right
         }
 
@@ -91,6 +96,7 @@ export class Player {
             this.powerUpAura.alpha = 0.7 + Math.sin(Date.now() * 0.008) * 0.3;
         }
     }
+
 
     // Temporary speed boost power-up
     activatePowerUp() {

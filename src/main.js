@@ -1,27 +1,37 @@
 import { Game } from "./game/Game.js";
 import { FaceTracker } from "./cv/FaceTracker.js";
+import { SceneManager } from "./game/SceneManager.js";
 import { startIntro } from "./style.js";
+import { voice } from "./services/voice.js";
 
 const game = new Game();
 
 // Face Tracking
-// Facetracker now sends faceCount, player direction, visible
 const faceTracker = new FaceTracker({
     onResults: (result) => {
-        console.log("Face count:", result.faceCount);
-        console.log("Player 1:", result.player1.direction);
-        console.log("Player 2:", result.player2.direction);
-        console.log("Facing each other:", result.facingEachOther);
+        if (!result.offline && result.faceCount > 0) {
+            // Debug metrics for testing
+        }
     }
 });
 
-// Start the camera/tracking immediately so it's warmed up by the time
-// the intro finishes. Gameplay itself only starts once the intro
-// transmission sequence completes (either choice leads here).
-faceTracker.start();
+// Scene State Machine
+const sceneManager = new SceneManager({
+    game,
+    faceTracker,
+});
 
+// Start camera/tracking and verify backend early during intro
+faceTracker.start();
+voice.checkHealth().then((online) => {
+    console.log(`[Alien Game] Central Vienium Backend is ${online ? "ONLINE" : "OFFLINE (Local Fallback Active)"}`);
+});
+
+// Intro transmission leads directly into Pixi gameplay
 startIntro({
-    onComplete: () => {
-        game.start();
+    onComplete: async () => {
+        await game.start();
+        sceneManager.init();
+        sceneManager.changeScene("LEVEL1");
     }
 });

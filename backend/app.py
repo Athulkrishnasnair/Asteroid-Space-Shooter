@@ -1,4 +1,5 @@
 import os
+import sys
 import uuid
 import logging
 from pathlib import Path
@@ -6,13 +7,16 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
-
 # ============================================================
 # Configuration
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 TEMP_DIR = BASE_DIR / "temp"
+
 
 # Make sure temporary files have somewhere to go.
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -238,34 +242,94 @@ def speak():
 # ============================================================
 
 FALLBACK_ROASTS = {
+    "LEVEL1_START": [
+        "Custody protocol CV-07 is active. Try not to embarrass your species.",
+        "Welcome to Sector CV-07. Please file all collision reports in triplicate.",
+        "Your vessel is unauthorized. Interception will be swift and sarcastic.",
+    ],
+
     "PLAYER_MISSED": [
         "That was certainly a tactical decision.",
         "The alien saw that coming from another galaxy.",
         "Central Vienium has questions about that shot.",
+        "Space is 99.9% empty, but you are really proving it.",
     ],
 
     "ALIEN_HIT": [
         "Congratulations. You have successfully annoyed the alien.",
         "That alien definitely felt that.",
-        "One less problem floating around in space.",
+        "One less unregistered organism in Sector CV-07.",
+        "Target liquidated. Custodial fees have been applied.",
+    ],
+
+    "POWER_UP": [
+        "Emergency thrusters engaged! Speed limits were merely polite suggestions.",
+        "Running away at 175% velocity. Very brave.",
+        "Ion overdrive active. Try not to crash into a meteor.",
+    ],
+
+    "GOLDEN_SPAWN": [
+        "Priority contraband vessel detected! Neutralize it for sector clearance!",
+        "Golden interceptor incoming! This is your ticket out of here.",
+    ],
+
+    "GOLDEN_HIT": [
+        "Golden ship neutralized! Triplicate clearance filed.",
+        "Flagship down! Central Vienium dispatch is moderately stunned.",
+    ],
+
+    "LEVEL1_COMPLETE": [
+        "Against all available evidence, you survived the airspace.",
+        "Central Vienium is reconsidering your threat level from zero to minimal.",
+        "Sector cleared. Do not celebrate too early.",
+    ],
+
+    "MAZE_START": [
+        "Welcome to the relationship maze. Try not to get lost immediately.",
+        "Entering cooperative evaluation grid. Eye contact is now mandatory.",
+        "Two humans enter. Hopefully two humans exit with working teamwork.",
+    ],
+
+    "FACING_GOOD": [
+        "Remarkable. Both test subjects are acknowledging each other's existence.",
+        "Optimal team alignment detected. Keep looking toward each other.",
+        "Eye contact maintained. Central Vienium metrics look surprisingly adequate.",
     ],
 
     "FACING_WRONG": [
-        "Perhaps look at your teammate instead of the void.",
-        "Your teammate is over there. Just saying.",
-        "The alien recommends turning around.",
+        "Perhaps looking at your teammate would be useful.",
+        "Your partner is over there. Just saying.",
+        "The alien recommends turning toward each other before you run into a wall.",
+        "Your teamwork has entered experimental territory.",
+    ],
+
+    "FACE_LOST": [
+        "I appear to have misplaced one human. Did someone wander off?",
+        "Player tracking interrupted. Please remain in visual range.",
+        "Central Vienium observation lost visual on one crew member.",
+    ],
+
+    "MAZE_STUCK": [
+        "This maze is not exactly advanced alien architecture.",
+        "The walls do not move. You, however, are not moving either.",
+        "Navigation assistance is not available under current budget constraints.",
+    ],
+
+    "MAZE_COMPLETE": [
+        "Against all available evidence, cooperation has occurred.",
+        "Custody evaluation finished. You are legally allowed to tolerate each other.",
+        "Relationship protocol satisfied. Central Vienium certifies your survival.",
     ],
 
     "PLAYER_DOWN": [
         "Central Vienium is reconsidering your recruitment.",
-        "That could have gone better.",
-        "Your tactical situation is becoming questionable.",
+        "That could have gone better. Substantially better.",
+        "Hull integrity compromised. That will not buff out easily.",
     ],
 
-    "LEVEL_COMPLETE": [
-        "Against all available evidence, you survived.",
-        "Central Vienium is almost impressed.",
-        "Mission accomplished. Somehow.",
+    "PLAYER_LOST": [
+        "Custody enforced permanently. Better luck in the next life cycle.",
+        "Mission failed. Central Vienium sends its minimal condolences.",
     ],
 
     "UNKNOWN": [
@@ -274,6 +338,7 @@ FALLBACK_ROASTS = {
         "I have several questions about that decision.",
     ],
 }
+
 
 
 @app.post("/api/roast")
