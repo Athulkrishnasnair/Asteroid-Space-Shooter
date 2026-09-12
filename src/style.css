@@ -473,6 +473,64 @@ button {
   font-size: 15px;
   letter-spacing: 2px;
 }
+
+/* I added code here */
+
+.decree-btn--start {
+    width: min(620px, 90vw);
+    min-height: 125px;
+    padding: 20px 32px;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+    overflow: hidden;
+}
+
+.decree-btn__label {
+    display: block;
+    width: 100%;
+    max-width: 620px;
+
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: normal;
+
+    text-align: center;
+    font-size: clamp(16px, 1.5vw, 28px);
+    line-height: 1.15;
+}
+
+.decree-btn__desc {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+
+    text-align: center;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+    .decree-btn--start {
+        width: 92vw;
+        min-height: 115px;
+        padding: 18px 14px;
+    }
+
+    .decree-btn__label {
+        font-size: 16px;
+    }
+
+    .decree-btn__desc {
+        font-size: 11px;
+    }
+}
+
 .decree-btn--surrender .decree-btn__label { color: var(--cv-steel); }
 .decree-btn--fight .decree-btn__label { color: var(--cv-crimson); }
 .decree-btn__desc {
