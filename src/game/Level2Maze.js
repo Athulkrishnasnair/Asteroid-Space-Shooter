@@ -6,6 +6,7 @@
 
 import { Container, Graphics, Sprite, Text } from "pixi.js";
 import { commentary } from "../services/commentary.js";
+import { resolveDirectionalCommand } from "./level2Consensus.js";
 
 // Simplified 12 columns x 8 rows maze
 // 1 = Wall, 0 = Corridor, 2 = Exit Chamber
@@ -51,7 +52,7 @@ export class Level2Maze {
             x: 0,
             y: 0,
             radius: 20,
-            speed: 3.2,
+            speed: 4.8,
             sprite: new Container(),
             aura: null,
             disagreeIcon: null,
@@ -75,6 +76,14 @@ export class Level2Maze {
         this.consensusDir = "CENTER";
         this.isDisagreed = false;
         this.disagreeTimer = 0;
+        this.directionHistory = { p1: [], p2: [] };
+        this.commandState = {
+            current: "CENTER",
+            previous: "CENTER",
+            lastChangedAt: 0,
+            graceUntil: 0,
+        };
+        this.playerVisible = { p1: false, p2: false };
 
         // Exit sync timer (1.8s required)
         this.syncTimeRequired = 1.8;
@@ -295,16 +304,24 @@ export class Level2Maze {
         this.visionOffline = !!results.offline;
         this.facingState = !!results.facingEachOther;
 
-        if (results.player1 && results.player1.visible) {
-            this.p1Dir = results.player1.direction || "CENTER";
-        } else {
-            this.p1Dir = "CENTER";
-        }
+        const p1Visible = !!(results.player1 && results.player1.visible);
+        const p2Visible = !!(results.player2 && results.player2.visible);
+        this.playerVisible = { p1: p1Visible, p2: p2Visible };
 
-        if (results.player2 && results.player2.visible) {
-            this.p2Dir = results.player2.direction || "CENTER";
-        } else {
-            this.p2Dir = "CENTER";
+        const p1Dir = p1Visible ? (results.player1.direction || "CENTER") : "CENTER";
+        const p2Dir = p2Visible ? (results.player2.direction || "CENTER") : "CENTER";
+
+        this.p1Dir = p1Dir;
+        this.p2Dir = p2Dir;
+
+        this.directionHistory.p1.push(p1Dir);
+        this.directionHistory.p2.push(p2Dir);
+        if (this.directionHistory.p1.length > 5) this.directionHistory.p1.shift();
+        if (this.directionHistory.p2.length > 5) this.directionHistory.p2.shift();
+
+        if (!p1Visible || !p2Visible) {
+            const now = performance.now();
+            this.commandState.graceUntil = Math.max(this.commandState.graceUntil, now + 450);
         }
 
         if (this.trackingHud) {
@@ -347,19 +364,18 @@ export class Level2Maze {
         let vx = 0;
         let vy = 0;
         const step = this.player.speed * (deltaTime / 1.0);
+        const now = performance.now();
 
         // Check for manual keyboard input first (WASD or Arrow Keys)
         let manualActive = false;
         let mX = 0;
         let mY = 0;
 
-        // Player 1 WASD
         if (this.input.isDown("w") || this.input.isDown("W")) mY -= 1;
         if (this.input.isDown("s") || this.input.isDown("S")) mY += 1;
         if (this.input.isDown("a") || this.input.isDown("A")) mX -= 1;
         if (this.input.isDown("d") || this.input.isDown("D")) mX += 1;
 
-        // Player 2 Arrow Keys
         if (this.input.isDown("ArrowUp")) mY -= 1;
         if (this.input.isDown("ArrowDown")) mY += 1;
         if (this.input.isDown("ArrowLeft")) mX -= 1;
@@ -374,36 +390,39 @@ export class Level2Maze {
             this.player.disagreeIcon.visible = false;
             this.player.aura.stroke({ color: 0x38bdf8, width: 2 });
         } else if (!this.visionOffline) {
-            // --- Computer Vision Cooperative Head Steering ---
-            // When both agree:
-            // LEFT + LEFT = Left
-            // RIGHT + RIGHT = Right
-            // CENTER + CENTER = Up / Forward
-            // DOWN + DOWN = Down / Back
-            if (this.p1Dir === this.p2Dir) {
+            const command = resolveDirectionalCommand({
+                p1Dir: this.p1Dir,
+                p2Dir: this.p2Dir,
+                p1Visible: this.playerVisible.p1,
+                p2Visible: this.playerVisible.p2,
+                history: [...this.directionHistory.p1.slice(-3), ...this.directionHistory.p2.slice(-3)],
+                previousCommand: this.commandState.current,
+                lastChangedAt: this.commandState.lastChangedAt,
+                now,
+                graceUntil: this.commandState.graceUntil,
+            });
+
+            if (command.action === "MOVE") {
                 this.isDisagreed = false;
                 this.player.disagreeIcon.visible = false;
                 this.player.aura.stroke({ color: 0x34d399, width: 3 });
+                this.player.sprite.rotation = 0;
 
-                if (this.p1Dir === "LEFT") {
-                    vx = -step;
-                } else if (this.p1Dir === "RIGHT") {
-                    vx = step;
-                } else if (this.p1Dir === "DOWN") {
-                    vy = step;
-                } else if (this.p1Dir === "CENTER") {
-                    // Both looking forward moves avatar upward / forward through maze
-                    vy = -step * 0.9;
+                if (command.direction !== this.commandState.current) {
+                    this.commandState.current = command.direction;
+                    this.commandState.lastChangedAt = now;
+                }
+
+                vx = command.dx * step;
+                vy = command.dy * step;
+
+                if (this.commandState.graceUntil && now > this.commandState.graceUntil) {
+                    this.commandState.graceUntil = 0;
                 }
             } else {
-                // Disagreement: Stop the ship!
-                vx = 0;
-                vy = 0;
                 this.isDisagreed = true;
                 this.player.disagreeIcon.visible = true;
                 this.player.aura.stroke({ color: 0xf87171, width: 3 });
-
-                // Subtle wobble animation when in disagreement
                 this.player.sprite.rotation = Math.sin(this.player.animTimer * 12) * 0.08;
 
                 if (this.roastCooldown <= 0) {

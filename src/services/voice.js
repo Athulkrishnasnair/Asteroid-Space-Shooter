@@ -111,6 +111,16 @@ class VoiceService {
         this.currentAudio = null;
         this.isSpeaking = false;
         this.lastRoastTimes = {};
+        this.audioUnlocked = false;
+    }
+
+    unlockAudio() {
+        this.audioUnlocked = true;
+        if (this.currentAudio) {
+            this.currentAudio.volume = 0.85;
+            this.currentAudio.play().catch(() => {});
+        }
+        return true;
     }
 
     // Helper: fetch with timeout
@@ -173,11 +183,19 @@ class VoiceService {
     async speak(text) {
         if (!text || typeof text !== "string") return false;
 
+        const normalized = text.trim();
+        if (!normalized) return false;
+
+        if (!this.audioUnlocked) {
+            console.warn("Voice audio is locked until the first user interaction.");
+            return false;
+        }
+
         try {
             const res = await this._fetchWithTimeout(`${BACKEND_URL}/api/speak`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text }),
+                body: JSON.stringify({ text: normalized }),
             }, 6000);
 
             if (!res.ok) {

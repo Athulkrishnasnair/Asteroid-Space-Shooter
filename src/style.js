@@ -3,6 +3,8 @@
 // Pure DOM + Canvas2D — deliberately kept separate from PixiJS. Nothing here
 // touches Game.js. Call `startIntro({ onComplete })` once from main.js.
 
+import { voice } from "./services/voice.js";
+
 // ---------------------------------------------------------------------
 // Centralized placeholder asset config.
 // When the art team's spritesheet lands, point these at the real files
@@ -231,10 +233,17 @@ export async function startIntro({ onComplete }) {
     landingAlienText.textContent = `"${LANDING_REMARKS[remarkIdx]}"`;
   }, 4200);
 
-  // Wait for user to click START MISSION
+  const startLabel = btnStartMission.querySelector(".decree-btn__label");
+  const startDesc = btnStartMission.querySelector(".decree-btn__desc");
+  startLabel.textContent = "[ CLICK TO ESTABLISH ALIEN COMMUNICATION ]";
+  startDesc.textContent = "Allow Central Vienium audio before the mission begins.";
+
   await new Promise((resolve) => {
     btnStartMission.addEventListener("click", () => {
       clearInterval(remarkInterval);
+      voice.unlockAudio();
+      startLabel.textContent = "[ START MISSION ]";
+      startDesc.textContent = "Submit vessel to Central Vienium custody evaluation.";
       landingHero.style.display = "none";
       signal.hidden = false;
       resolve();
