@@ -501,7 +501,7 @@ button {
     word-break: normal;
 
     text-align: center;
-    font-size: clamp(16px, 1.5vw, 28px);
+    font-size: clamp(16px, 1.3vw, 28px);
     line-height: 1.15;
 }
 
