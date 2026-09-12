@@ -145,6 +145,14 @@ class VoiceService {
     }
 
     stopSpeaking() {
+        // Stop AudioContext source if active
+        if (this._currentSource) {
+            try {
+                this._currentSource.stop();
+            } catch (e) {}
+            this._currentSource = null;
+        }
+        // Stop Audio element fallback if active
         if (this.currentAudio) {
             try {
                 this.currentAudio.pause();
@@ -212,15 +220,25 @@ class VoiceService {
     }
 
     // Synthesize text with Piper via /api/speak and play WAV audio
+    // Uses AudioContext (decodeAudioData + BufferSource) so playback works
+    // even when the browser's autoplay gate has closed on the user gesture —
+    // AudioContext stays unlocked for the lifetime of the page once resumed.
     async speak(text) {
         if (!text || typeof text !== "string") return false;
 
         const normalized = text.trim();
         if (!normalized) return false;
 
-        // Auto unlock if possible
-        if (!this.audioUnlocked) {
-            this.unlockAudio();
+        // Ensure AudioContext is created and resumed
+        if (!this.audioCtx) {
+            try {
+                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                console.warn("AudioContext unavailable, falling back to Audio element:", e);
+            }
+        }
+        if (this.audioCtx && this.audioCtx.state === "suspended") {
+            await this.audioCtx.resume().catch(() => {});
         }
 
         try {
@@ -228,19 +246,60 @@ class VoiceService {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ text: normalized }),
-            }, 6000);
+            }, 8000);
 
             if (!res.ok) {
                 console.warn("Piper synthesis returned non-OK status:", res.status);
                 return false;
             }
 
-            const blob = await res.blob();
-            const audioUrl = URL.createObjectURL(blob);
+            const arrayBuffer = await res.arrayBuffer();
 
             // Stop any currently playing alien speech
             this.stopSpeaking();
 
+            // Prefer AudioContext playback (immune to autoplay policy after unlock)
+            if (this.audioCtx && this.audioCtx.state !== "closed") {
+                return new Promise((resolve) => {
+                    this.audioCtx.decodeAudioData(arrayBuffer, (audioBuffer) => {
+                        const source = this.audioCtx.createBufferSource();
+                        const gainNode = this.audioCtx.createGain();
+                        gainNode.gain.value = 0.9;
+                        source.buffer = audioBuffer;
+                        source.connect(gainNode);
+                        gainNode.connect(this.audioCtx.destination);
+
+                        this.isSpeaking = true;
+                        this._currentSource = source;
+
+                        source.onended = () => {
+                            this.isSpeaking = false;
+                            this._currentSource = null;
+                            resolve(true);
+                        };
+
+                        source.start(0);
+                    }, (decodeErr) => {
+                        console.warn("AudioContext decodeAudioData failed, falling back:", decodeErr);
+                        this._speakViaAudioElement(arrayBuffer).then(resolve);
+                    });
+                });
+            }
+
+            // AudioContext not available — fall back to Audio element
+            return this._speakViaAudioElement(arrayBuffer);
+
+        } catch (err) {
+            console.warn("VoiceService.speak error (continuing without audio):", err);
+            return false;
+        }
+    }
+
+    // Fallback: play ArrayBuffer as audio via blob URL + Audio element
+    async _speakViaAudioElement(arrayBuffer) {
+        try {
+            const blob = new Blob([arrayBuffer], { type: "audio/wav" });
+            const audioUrl = URL.createObjectURL(blob);
             const audio = new Audio(audioUrl);
             audio.volume = 0.9;
             this.currentAudio = audio;
@@ -253,22 +312,18 @@ class VoiceService {
                     cleaned = true;
                     this.isSpeaking = false;
                     URL.revokeObjectURL(audioUrl);
-                    if (this.currentAudio === audio) {
-                        this.currentAudio = null;
-                    }
+                    if (this.currentAudio === audio) this.currentAudio = null;
                     resolve(true);
                 };
-
                 audio.onended = cleanup;
                 audio.onerror = cleanup;
-
-                audio.play().catch((playErr) => {
-                    console.warn("Audio autoplay prevented or error:", playErr);
+                audio.play().catch((e) => {
+                    console.warn("Audio element fallback autoplay blocked:", e);
                     cleanup();
                 });
             });
-        } catch (err) {
-            console.warn("VoiceService.speak error (continuing without audio):", err);
+        } catch (e) {
+            this.isSpeaking = false;
             return false;
         }
     }

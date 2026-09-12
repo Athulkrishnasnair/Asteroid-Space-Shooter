@@ -2,6 +2,7 @@
 // Level 4 — Central Vienium Alien Power-O-Meter
 // Players assume a power pose / raise their hands to charge an absurd fictional
 // cosmic power meter. Generates fictional Alien Units scores and reactions.
+// Added: Webcam PiP overlay so players can see themselves during the pose test.
 
 import { Container, Graphics, Text, Sprite, AnimatedSprite } from "pixi.js";
 import { commentary } from "../services/commentary.js";
@@ -38,11 +39,13 @@ export class Level4PowerMeter {
         this.chargeProgress = 0; // 0 to 1
         this.poseDetected = false;
         this.chargingSparks = [];
+        this._pipRaf = null;
 
         this.initBackground();
         this.initMeterUI();
         this.initAlienBox();
         this.initDialogueBox();
+        this.initWebcamPiP();
 
         // Start Level 4 Introduction
         setTimeout(() => {
@@ -432,9 +435,173 @@ export class Level4PowerMeter {
         }, 5500);
     }
 
+    // ─── Webcam PiP Overlay ───────────────────────────────────────────────────
+
+    initWebcamPiP() {
+        if (document.getElementById("level4-pip-overlay")) return;
+
+        // Outer wrapper (DOM, positioned over canvas)
+        this._pipEl = document.createElement("div");
+        this._pipEl.id = "level4-pip-overlay";
+        Object.assign(this._pipEl.style, {
+            position: "fixed",
+            bottom: "24px",
+            left: "24px",
+            width: "220px",
+            zIndex: "30",
+            fontFamily: "'Press Start 2P', monospace",
+            pointerEvents: "none",
+        });
+
+        // Header bar
+        const header = document.createElement("div");
+        Object.assign(header.style, {
+            background: "#070a10",
+            border: "2px solid #38bdf8",
+            borderBottom: "none",
+            color: "#38bdf8",
+            fontSize: "7px",
+            letterSpacing: "1px",
+            padding: "5px 10px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+        });
+        header.innerHTML = '<span>BIOMETRIC POSE SCAN</span><span id="level4-pip-status" style="color:#22c55e">● LIVE</span>';
+        this._pipEl.appendChild(header);
+
+        // Canvas
+        this._pipCanvas = document.createElement("canvas");
+        this._pipCanvas.width = 220;
+        this._pipCanvas.height = 165;
+        Object.assign(this._pipCanvas.style, {
+            display: "block",
+            border: "2px solid #38bdf8",
+            borderTop: "none",
+            imageRendering: "pixelated",
+        });
+        this._pipEl.appendChild(this._pipCanvas);
+        this._pipCtx = this._pipCanvas.getContext("2d");
+
+        // Footer label
+        this._pipStatusBar = document.createElement("div");
+        Object.assign(this._pipStatusBar.style, {
+            background: "#070a10",
+            border: "2px solid #38bdf8",
+            borderTop: "1px solid #1e3a5f",
+            color: "#9ca3af",
+            fontSize: "6px",
+            padding: "4px 10px",
+            letterSpacing: "1px",
+        });
+        this._pipStatusBar.textContent = "STRIKE A POWER POSE";
+        this._pipEl.appendChild(this._pipStatusBar);
+
+        document.body.appendChild(this._pipEl);
+
+        // Start render loop
+        let scanY = 0;
+        const video = this.faceTracker ? this.faceTracker.getVideoElement() : null;
+
+        const drawPiP = () => {
+            this._pipRaf = requestAnimationFrame(drawPiP);
+            const ctx = this._pipCtx;
+            const w = this._pipCanvas.width;
+            const h = this._pipCanvas.height;
+
+            ctx.fillStyle = "#070a10";
+            ctx.fillRect(0, 0, w, h);
+
+            if (video && video.readyState >= 2) {
+                // Mirror the video (flip horizontally)
+                ctx.save();
+                ctx.translate(w, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(video, 0, 0, w, h);
+                ctx.restore();
+
+                // CRT scanline overlay
+                ctx.fillStyle = "rgba(0,0,0,0.18)";
+                for (let y = 0; y < h; y += 3) {
+                    ctx.fillRect(0, y, w, 1);
+                }
+
+                // Animated scan pulse
+                scanY = (scanY + 1.5) % h;
+                const scanGrad = ctx.createLinearGradient(0, scanY - 8, 0, scanY + 8);
+                scanGrad.addColorStop(0, "rgba(56,189,248,0)");
+                scanGrad.addColorStop(0.5, "rgba(56,189,248,0.22)");
+                scanGrad.addColorStop(1, "rgba(56,189,248,0)");
+                ctx.fillStyle = scanGrad;
+                ctx.fillRect(0, scanY - 8, w, 16);
+
+                // Retro targeting border
+                ctx.strokeStyle = this.chargeProgress > 0.5 ? "#22c55e" : "#38bdf8";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(4, 4, w - 8, h - 8);
+
+                // Corner tick marks
+                const tick = 12;
+                ctx.lineWidth = 3;
+                [[4, 4], [w - 4, 4], [4, h - 4], [w - 4, h - 4]].forEach(([cx, cy]) => {
+                    const sx = cx === 4 ? 1 : -1;
+                    const sy = cy === 4 ? 1 : -1;
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy + sy * tick);
+                    ctx.lineTo(cx, cy);
+                    ctx.lineTo(cx + sx * tick, cy);
+                    ctx.stroke();
+                });
+
+                // Charge level indicator bar at bottom of feed
+                const barW = Math.round((w - 8) * this.chargeProgress);
+                ctx.fillStyle = this.chargeProgress > 0.8 ? "#22c55e" : this.chargeProgress > 0.4 ? "#f59e0b" : "#38bdf8";
+                ctx.fillRect(4, h - 12, barW, 8);
+
+                // Status label
+                const pct = Math.round(this.chargeProgress * 100);
+                this._pipStatusBar.textContent = pct >= 100 ? "★ POWER MAXED — EVALUATION COMPLETE" :
+                    pct > 50 ? `CHARGING — ${pct}% ALIEN UNITS DETECTED` :
+                    "RAISE ARMS / STRIKE A POWER POSE";
+                this._pipStatusBar.style.color = pct >= 100 ? "#22c55e" : pct > 50 ? "#f59e0b" : "#9ca3af";
+
+            } else {
+                // No video: draw static
+                const imgData = ctx.createImageData(w, h);
+                const buf = new Uint32Array(imgData.data.buffer);
+                for (let i = 0; i < buf.length; i++) {
+                    buf[i] = Math.random() < 0.06 ? 0xff38bdf8 : 0xff05070a;
+                }
+                ctx.putImageData(imgData, 0, 0);
+                ctx.fillStyle = "#ef4444";
+                ctx.font = "8px 'Press Start 2P', monospace";
+                ctx.textAlign = "center";
+                ctx.fillText("NO SIGNAL", w / 2, h / 2);
+
+                this._pipStatusBar.textContent = "CAMERA OFFLINE — USE SPACEBAR";
+                this._pipStatusBar.style.color = "#ef4444";
+            }
+        };
+
+        drawPiP();
+    }
+
+    destroyWebcamPiP() {
+        if (this._pipRaf) {
+            cancelAnimationFrame(this._pipRaf);
+            this._pipRaf = null;
+        }
+        const el = document.getElementById("level4-pip-overlay");
+        if (el) el.remove();
+        this._pipEl = null;
+        this._pipCanvas = null;
+        this._pipCtx = null;
+    }
+
     destroy() {
         if (this.unsubscribeCommentary) this.unsubscribeCommentary();
         if (this.unsubscribeMouth) this.unsubscribeMouth();
+        this.destroyWebcamPiP();
         this.container.destroy({ children: true });
     }
 }
