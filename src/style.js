@@ -4,6 +4,7 @@
 // touches Game.js. Call `startIntro({ onComplete })` once from main.js.
 
 import { voice } from "./services/voice.js";
+import { commentary } from "./services/commentary.js";
 
 // ---------------------------------------------------------------------
 // Centralized placeholder asset config.
@@ -246,6 +247,9 @@ export async function startIntro({ onComplete }) {
       startDesc.textContent = "Submit vessel to Central Vienium custody evaluation.";
       landingHero.style.display = "none";
       signal.hidden = false;
+
+      // Alien speaks first greeting through Piper
+      commentary.say("Ah. Two humans. Central Vienium has reviewed your application. Unfortunately, your application is suspicious. Proceed.", { force: true });
       resolve();
     }, { once: true });
   });
@@ -261,11 +265,15 @@ export async function startIntro({ onComplete }) {
   signal.style.display = "none";
   hud.hidden = false;
   utilityBar.hidden = false;
+  const placeholderShip = qs("placeholder-ship");
+  if (placeholderShip) placeholderShip.hidden = false;
 
 
   // 2. Dialogue part 1
   dialoguePanel.hidden = false;
   for (const line of DIALOGUE_PART_1) {
+    // Speak line through Piper
+    commentary.say(line, { force: true });
     // eslint-disable-next-line no-await-in-loop
     await typeLine(dialogueText, line);
     advancePrompt.classList.add("is-visible");
@@ -291,6 +299,8 @@ export async function startIntro({ onComplete }) {
   // 4. Twist dialogue
   dialoguePanel.hidden = false;
   for (const line of DIALOGUE_PART_2) {
+    // Speak line through Piper
+    commentary.say(line, { force: true });
     // eslint-disable-next-line no-await-in-loop
     await typeLine(dialogueText, line);
     advancePrompt.classList.add("is-visible");

@@ -38,7 +38,7 @@
     </aside>
 
     <!-- placeholder vessel, swapped for real sprite later (see style.js ASSET_PATHS) -->
-    <div class="placeholder-ship" id="placeholder-ship" aria-hidden="true">
+    <div class="placeholder-ship" id="placeholder-ship" aria-hidden="true" hidden>
       <div class="placeholder-ship__hull"></div>
       <div class="placeholder-ship__engine"></div>
     </div>
@@ -46,9 +46,9 @@
     <!-- landing title and alien teaser panel -->
     <div class="landing-hero" id="landing-hero">
       <div class="landing-badge-strip">
-        <span class="status-chip status-chip--vision">● VISION: ONLINE</span>
+        <span class="status-chip status-chip--vision">● VISION: STANDBY</span>
         <span class="status-chip status-chip--voice">● VOICE: STANDBY</span>
-        <span class="status-chip status-chip--ai">● ALIEN COMMENTARY: ACTIVE</span>
+        <span class="status-chip status-chip--ai">● ALIEN: ONLINE</span>
       </div>
 
       <h1 class="landing-title">CENTRAL VIENIUM</h1>
@@ -56,17 +56,17 @@
 
       <div class="landing-alien-box pixel-border">
         <div class="landing-alien-box__header">
-          <span>ALIEN SURVEILLANCE FEED</span>
+          <span>ALIEN SURVEILLANCE FEED // SECTOR CV-07</span>
           <span class="panel__rec"><i class="panel__rec-dot"></i>LIVE</span>
         </div>
         <div class="landing-alien-box__body">
-          <p class="landing-alien-dialogue" id="landing-alien-text">"Ah. Two humans. Your compatibility evaluation has been scheduled. I have absolutely no confidence in this."</p>
+          <p class="landing-alien-dialogue" id="landing-alien-text">"Ah. Two humans. Central Vienium has reviewed your application. Unfortunately, your application is suspicious. Proceed."</p>
         </div>
       </div>
 
       <button class="decree-btn decree-btn--start pixel-border" id="btn-start-mission" type="button">
-        <span class="decree-btn__label">[ START MISSION ]</span>
-        <span class="decree-btn__desc">Submit vessel to Central Vienium custody evaluation.</span>
+        <span class="decree-btn__label">[ INITIALIZE ALIEN AUDIO &amp; START ]</span>
+        <span class="decree-btn__desc">Authorize Central Vienium observation &amp; custody evaluation.</span>
       </button>
     </div>
 

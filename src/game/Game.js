@@ -6,6 +6,7 @@ import { Bullet } from "../entities/Bullet.js";
 import { SoundManager } from "./SoundManager.js";
 import { HUD } from "./HUD.js";
 import { voice } from "../services/voice.js";
+import { commentary } from "../services/commentary.js";
 
 // Visual asset imports
 import shipImg from "../assets/MeduimQualityAssets/MeduimQualityAssets/SpaceShip(256px).png";
@@ -408,6 +409,7 @@ export class Game {
         this.missStreak++;
         if (this.missStreak === 6 && this.hud) {
             this.hud.triggerJoke("missStreak");
+            commentary.recordStat("level1Misses", 6);
         }
     }
 
@@ -925,6 +927,7 @@ export class Game {
                     this.hud.updateScore(this.score);
                     this.hud.triggerJoke("goldenHit", true);
                 }
+                commentary.setStat("level1GoldenHit", true);
 
                 this.soundManager.playGoldenHit();
                 this.spawnDebris(this.goldenAlien.sprite.x, this.goldenAlien.sprite.y);
@@ -947,6 +950,7 @@ export class Game {
                         this.hud.updateScore(this.score);
                         this.hud.triggerJoke("alienKill");
                     }
+                    commentary.recordStat("level1Kills");
 
                     this.soundManager.playAlienExplosion();
                     this.spawnDebris(alien.sprite.x, alien.sprite.y);

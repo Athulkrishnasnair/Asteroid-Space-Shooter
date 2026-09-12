@@ -1,10 +1,13 @@
 // src/game/SceneManager.js
-// Scene state machine:
-// INTRO -> LEVEL1 -> TRANSITION -> LEVEL2 -> TRANSITION_2_3 -> LEVEL3 -> ENDING
+// Master scene state machine:
+// INTRO -> LEVEL1 -> TRANSITION_1_2 -> LEVEL2 -> TRANSITION_2_3 -> LEVEL3
+// -> TRANSITION_3_4 -> LEVEL4 -> TRANSITION_4_FINAL -> FINAL_SCREEN
 
 import { Container, Graphics, Text, Sprite } from "pixi.js";
 import { Level2Maze } from "./Level2Maze.js";
 import { Level3Subway } from "./Level3Subway.js";
+import { Level4PowerMeter } from "./Level4PowerMeter.js";
+import { FinalScreen } from "./FinalScreen.js";
 import { TrackingHUD } from "./TrackingHUD.js";
 import { voice } from "../services/voice.js";
 import { commentary } from "../services/commentary.js";
@@ -19,33 +22,24 @@ export class SceneManager {
         this.trackingHud = null;
         this.level2 = null;
         this.level3 = null;
-        this.transitionContainer = null;
-        this.transition23Container = null;
-        this.endingContainer = null;
+        this.level4 = null;
+        this.finalScreen = null;
+
+        this.transitionContainer = new Container();
         this.fontFamily = "'Press Start 2P', monospace";
         this.initialized = false;
-        this._sceneChanging = false;
     }
 
     init() {
         if (this.initialized) return;
         this.initialized = true;
 
-        this.transitionContainer = new Container();
-        this.transition23Container = new Container();
-        this.endingContainer = new Container();
-
         this.app.stage.addChild(this.transitionContainer);
-        this.app.stage.addChild(this.transition23Container);
-        this.app.stage.addChild(this.endingContainer);
-
         this.transitionContainer.visible = false;
-        this.transition23Container.visible = false;
-        this.endingContainer.visible = false;
 
         // Listen for Level 1 complete
         this.game.onLevelComplete = () => {
-            this.changeScene("TRANSITION");
+            this.changeScene("TRANSITION_1_2");
         };
 
         this.initFaceTracking();
@@ -87,23 +81,27 @@ export class SceneManager {
         console.log(`[SceneManager] ${this.currentScene} -> ${newScene}`);
         this.currentScene = newScene;
 
-        // Hide all overlay layers first
+        // Hide transition layer
         this.transitionContainer.visible = false;
-        this.transition23Container.visible = false;
-        this.endingContainer.visible = false;
 
         if (newScene === "LEVEL1") {
             if (this.trackingHud) this.trackingHud.hide();
             this._destroyLevel2();
             this._destroyLevel3();
+            this._destroyLevel4();
+            this._destroyFinalScreen();
             this.game.show();
             this.game.restart();
-            voice.commentate("LEVEL1_START");
+            commentary.say("Sector CV-07 custody protocol active. Defend your vessel.", { force: true });
 
-        } else if (newScene === "TRANSITION") {
+        } else if (newScene === "TRANSITION_1_2") {
             this.game.hide();
             if (this.trackingHud) this.trackingHud.hide();
-            this.playTransitionCutscene();
+            this.playTransitionCutscene(
+                "SECTOR CV-07 CLEARED.\nINITIATING BIOMETRIC CUSTODY GRID...\nMAINTAIN PARTNER EYE CONTACT.",
+                "LEVEL2",
+                3.0
+            );
 
         } else if (newScene === "LEVEL2") {
             this.game.hide();
@@ -118,9 +116,27 @@ export class SceneManager {
         } else if (newScene === "LEVEL3") {
             this.mountLevel3();
 
-        } else if (newScene === "ENDING") {
+        } else if (newScene === "TRANSITION_3_4") {
             this._destroyLevel3();
-            this.mountEndingScreen();
+            this.playTransitionCutscene(
+                "TRANSIT POLICE INTERCEPTION COMPLETE.\nTRANSPORTING DEFENDANTS TO PHYSICAL EVALUATION:\nTHE ALIEN POWER-O-METER.",
+                "LEVEL4",
+                3.0
+            );
+
+        } else if (newScene === "LEVEL4") {
+            this.mountLevel4();
+
+        } else if (newScene === "TRANSITION_4_FINAL") {
+            this._destroyLevel4();
+            this.playTransitionCutscene(
+                "PHYSICAL POWER CAPACITANCE COMPILED.\nOPENING SUPREME INQUIRY CHAMBER FOR FINAL VERDICT.",
+                "FINAL_SCREEN",
+                3.0
+            );
+
+        } else if (newScene === "FINAL_SCREEN") {
+            this.mountFinalScreen();
         }
     }
 
@@ -138,9 +154,23 @@ export class SceneManager {
         }
     }
 
-    // ─── LEVEL 1 → LEVEL 2 Transition Cutscene ───────────────────────────────
+    _destroyLevel4() {
+        if (this.level4) {
+            this.level4.destroy();
+            this.level4 = null;
+        }
+    }
 
-    playTransitionCutscene() {
+    _destroyFinalScreen() {
+        if (this.finalScreen) {
+            this.finalScreen.destroy();
+            this.finalScreen = null;
+        }
+    }
+
+    // ─── Generic Cinematic Transition Cutscene ────────────────────────────────
+
+    playTransitionCutscene(messageText, nextScene, duration = 3.0) {
         this.transitionContainer.removeChildren();
         this.transitionContainer.visible = true;
 
@@ -149,7 +179,7 @@ export class SceneManager {
 
         const bg = new Graphics();
         bg.rect(0, 0, w, h);
-        bg.fill({ color: 0x05070a, alpha: 0.95 });
+        bg.fill({ color: 0x05070a, alpha: 0.96 });
         this.transitionContainer.addChild(bg);
 
         // Warp streaks
@@ -169,8 +199,8 @@ export class SceneManager {
         if (this.game.textures.playerFrames && this.game.textures.playerFrames.length > 0) {
             shipSpr = new Sprite(this.game.textures.playerFrames[0]);
             shipSpr.anchor.set(0.5);
-            shipSpr.width = 72;
-            shipSpr.height = 72;
+            shipSpr.width = 68;
+            shipSpr.height = 68;
             shipSpr.x = w / 2;
             shipSpr.y = h * 0.65;
             this.transitionContainer.addChild(shipSpr);
@@ -178,32 +208,40 @@ export class SceneManager {
 
         const bannerBox = new Container();
         const bannerBg = new Graphics();
-        bannerBg.roundRect(0, 0, Math.min(640, w - 40), 120, 6);
+        const bannerW = Math.min(640, w - 40);
+        bannerBg.roundRect(0, 0, bannerW, 110, 6);
         bannerBg.fill({ color: 0x0a0e14, alpha: 0.95 });
         bannerBg.stroke({ color: 0xf59e0b, width: 2 });
         bannerBox.addChild(bannerBg);
 
         const subTitle = new Text({
-            text: "INCOMING TRANSMISSION // SECTOR CV-08",
-            style: { fontFamily: this.fontFamily, fontSize: 12, fill: "#F59E0B" },
+            text: "TRANSMISSION // CENTRAL VIENIUM SECTOR COMMAND",
+            style: { fontFamily: this.fontFamily, fontSize: 9.5, fill: "#F59E0B" },
         });
         subTitle.x = 20;
         subTitle.y = 16;
         bannerBox.addChild(subTitle);
 
         const bodyText = new Text({
-            text: "SECTOR CV-07 CLEARED.\nINITIATING BIOMETRIC CUSTODY GRID...\nMAINTAIN PARTNER EYE CONTACT.",
-            style: { fontFamily: this.fontFamily, fontSize: 11, fill: "#E5E7EB", lineHeight: 24 },
+            text: messageText,
+            style: { fontFamily: this.fontFamily, fontSize: 10, fill: "#E5E7EB", lineHeight: 22 },
         });
         bodyText.x = 20;
-        bodyText.y = 44;
+        bodyText.y = 42;
         bannerBox.addChild(bodyText);
 
-        bannerBox.x = (w - Math.min(640, w - 40)) / 2;
-        bannerBox.y = 60;
+        bannerBox.x = (w - bannerW) / 2;
+        bannerBox.y = 70;
         this.transitionContainer.addChild(bannerBox);
 
-        voice.commentate("LEVEL1_COMPLETE");
+        const promptText = new Text({
+            text: "[ CLICK OR PRESS SPACE TO ADVANCE ]",
+            style: { fontFamily: this.fontFamily, fontSize: 8, fill: "#9CA3AF" },
+        });
+        promptText.anchor.set(0.5);
+        promptText.x = w / 2;
+        promptText.y = bannerBox.y + 130;
+        this.transitionContainer.addChild(promptText);
 
         const startTime = Date.now();
         const tickerFunc = () => {
@@ -217,19 +255,34 @@ export class SceneManager {
                 shipSpr.scale.x = 1.0 + Math.sin(Date.now() * 0.01) * 0.05;
                 shipSpr.scale.y = 1.0 + Math.sin(Date.now() * 0.01) * 0.05;
             }
-            if (elapsed >= 3.2) {
-                this.app.ticker.remove(tickerFunc);
-                this.changeScene("LEVEL2");
+            if (elapsed >= duration) {
+                finish();
             }
         };
+
+        const finish = () => {
+            this.app.ticker.remove(tickerFunc);
+            window.removeEventListener("keydown", skipHandler);
+            window.removeEventListener("pointerup", skipHandler);
+            this.transitionContainer.visible = false;
+            this.changeScene(nextScene);
+        };
+
+        const skipHandler = (e) => {
+            if (e.type === "keydown" && e.code !== "Space") return;
+            finish();
+        };
+
+        window.addEventListener("keydown", skipHandler);
+        window.addEventListener("pointerup", skipHandler);
         this.app.ticker.add(tickerFunc);
     }
 
-    // ─── LEVEL 2 → LEVEL 3 Transition Cutscene ───────────────────────────────
+    // ─── Level 2 → Level 3 Transit Police Arrest Cutscene ─────────────────────
 
     playTransition23Cutscene() {
-        this.transition23Container.removeChildren();
-        this.transition23Container.visible = true;
+        this.transitionContainer.removeChildren();
+        this.transitionContainer.visible = true;
 
         const w = this.app.screen.width;
         const h = this.app.screen.height;
@@ -237,13 +290,13 @@ export class SceneManager {
         const bg = new Graphics();
         bg.rect(0, 0, w, h);
         bg.fill({ color: 0x030508, alpha: 1 });
-        this.transition23Container.addChild(bg);
+        this.transitionContainer.addChild(bg);
 
-        // Red siren flicker overlay
+        // Siren flash overlay
         const sirenFlash = new Graphics();
         sirenFlash.rect(0, 0, w, h);
         sirenFlash.fill({ color: 0xef4444, alpha: 0.0 });
-        this.transition23Container.addChild(sirenFlash);
+        this.transitionContainer.addChild(sirenFlash);
 
         const lines = [];
         const CUTSCENE_LINES = [
@@ -261,76 +314,69 @@ export class SceneManager {
             "OR USE KEYBOARD: A/D/W/S",
         ];
 
-        let curLine = 0;
-
         CUTSCENE_LINES.forEach((txt, i) => {
             const t = new Text({
                 text: txt,
                 style: {
                     fontFamily: this.fontFamily,
-                    fontSize: i < 5 ? 13 : 10,
+                    fontSize: i < 5 ? 12 : 9,
                     fill: i === 3 ? "#EF4444" : i >= 6 && i <= 9 ? "#38BDF8" : "#E5E7EB",
                     letterSpacing: 1,
                 },
             });
             t.anchor.set(0.5, 0);
             t.x = w / 2;
-            t.y = h * 0.12 + i * 38;
+            t.y = h * 0.12 + i * 36;
             t.alpha = 0;
-            this.transition23Container.addChild(t);
+            this.transitionContainer.addChild(t);
             lines.push(t);
         });
 
-        // Siren sound + commentary
         if (this.game.soundManager) {
             this.game.soundManager.playGoldenSpawn();
         }
-        commentary.say("Congratulations. You escaped the maze. Unfortunately... you are now under arrest! Welcome to the Central Vienium Transit Authority.", { force: true });
+
+        commentary.say(
+            "Congratulations. You escaped the maze. Unfortunately... you are now under arrest! Welcome to the Central Vienium Transit Authority.",
+            { force: true }
+        );
 
         const startTime = Date.now();
-        let sirenToggle = false;
-
         const tickerFunc = () => {
             const elapsed = (Date.now() - startTime) / 1000;
+            sirenFlash.alpha = (Math.sin(elapsed * 8) > 0) ? 0.08 : 0;
 
-            // Siren flash effect
-            sirenFlash.alpha = (Math.sin(elapsed * 8) > 0) ? 0.06 : 0;
-
-            // Reveal lines one by one
-            const targetLine = Math.min(lines.length - 1, Math.floor(elapsed / 0.45));
+            const targetLine = Math.min(lines.length - 1, Math.floor(elapsed / 0.4));
             for (let i = 0; i <= targetLine; i++) {
                 if (lines[i].alpha < 1) {
-                    lines[i].alpha = Math.min(1, lines[i].alpha + 0.08);
+                    lines[i].alpha = Math.min(1, lines[i].alpha + 0.1);
                 }
             }
 
-            // After 5.5s move to Level 3, or on spacebar/click
-            if (elapsed >= 5.5) {
-                this.app.ticker.remove(tickerFunc);
-                this._startLevel3();
+            if (elapsed >= 5.0) {
+                finish();
             }
         };
 
-        // Allow skip with spacebar or click
-        const skipHandler = (e) => {
-            if (e.type === "keydown" && e.code !== "Space") return;
+        const finish = () => {
+            this.app.ticker.remove(tickerFunc);
             window.removeEventListener("keydown", skipHandler);
             window.removeEventListener("pointerup", skipHandler);
-            this.app.ticker.remove(tickerFunc);
-            this._startLevel3();
+            this.transitionContainer.visible = false;
+            this.changeScene("LEVEL3");
         };
+
+        const skipHandler = (e) => {
+            if (e.type === "keydown" && e.code !== "Space") return;
+            finish();
+        };
+
         window.addEventListener("keydown", skipHandler);
         window.addEventListener("pointerup", skipHandler);
-
         this.app.ticker.add(tickerFunc);
     }
 
-    _startLevel3() {
-        this.transition23Container.visible = false;
-        this.changeScene("LEVEL3");
-    }
-
-    // ─── Mount Level 2 ────────────────────────────────────────────────────────
+    // ─── Scene Mount Handlers ─────────────────────────────────────────────────
 
     mountLevel2() {
         this._destroyLevel2();
@@ -349,8 +395,6 @@ export class SceneManager {
         this.app.stage.addChild(this.level2.container);
     }
 
-    // ─── Mount Level 3 ────────────────────────────────────────────────────────
-
     mountLevel3() {
         this._destroyLevel3();
 
@@ -360,137 +404,47 @@ export class SceneManager {
             soundManager: this.game.soundManager,
             textures: this.game.textures,
             onComplete: () => {
-                this.changeScene("ENDING");
+                this.changeScene("TRANSITION_3_4");
             },
         });
 
         this.app.stage.addChild(this.level3.container);
-        commentary.roast("SUBWAY_START", {}, { force: true });
+        commentary.say("Welcome to the Central Vienium Transit Authority. Say your commands clearly or use keyboard override.", { force: true });
     }
 
-    // ─── Ending Screen (Transit Police Custody Report) ────────────────────────
+    mountLevel4() {
+        this._destroyLevel4();
 
-    mountEndingScreen() {
-        this.endingContainer.removeChildren();
-        this.endingContainer.visible = true;
-
-        const w = this.app.screen.width;
-        const h = this.app.screen.height;
-
-        const bg = new Graphics();
-        bg.rect(0, 0, w, h);
-        bg.fill({ color: 0x05070a, alpha: 0.97 });
-        this.endingContainer.addChild(bg);
-
-        // Animated red siren blips
-        const siren1 = new Graphics();
-        siren1.circle(w * 0.3, h * 0.22, 18);
-        siren1.fill({ color: 0xef4444, alpha: 0.8 });
-        this.endingContainer.addChild(siren1);
-
-        const siren2 = new Graphics();
-        siren2.circle(w * 0.7, h * 0.22, 18);
-        siren2.fill({ color: 0x3b82f6, alpha: 0.8 });
-        this.endingContainer.addChild(siren2);
-
-        const cardW = Math.min(720, w - 40);
-        const cardH = 360;
-        const cardX = (w - cardW) / 2;
-        const cardY = (h - cardH) / 2 - 20;
-
-        const cardBg = new Graphics();
-        cardBg.roundRect(cardX, cardY, cardW, cardH, 8);
-        cardBg.fill({ color: 0x0a0e14, alpha: 0.98 });
-        cardBg.stroke({ color: 0xef4444, width: 3 });
-        this.endingContainer.addChild(cardBg);
-
-        const title = new Text({
-            text: "CENTRAL VIENIUM TRANSIT POLICE",
-            style: { fontFamily: this.fontFamily, fontSize: 13, fill: "#EF4444", letterSpacing: 1 },
-        });
-        title.anchor.set(0.5, 0);
-        title.x = w / 2;
-        title.y = cardY + 20;
-        this.endingContainer.addChild(title);
-
-        const sub = new Text({
-            text: "CUSTODY REPORT // INCIDENT CV-08-TRANSIT",
-            style: { fontFamily: this.fontFamily, fontSize: 9, fill: "#F59E0B" },
-        });
-        sub.anchor.set(0.5, 0);
-        sub.x = w / 2;
-        sub.y = cardY + 50;
-        this.endingContainer.addChild(sub);
-
-        const verdict = new Text({
-            text: "SUBJECTS: CAUGHT BY TRANSIT POLICE\nCHARGE: UNLAWFUL SUBWAY OPERATION\nSENTENCE: MANDATORY COMPATIBILITY REVIEW",
-            style: { fontFamily: this.fontFamily, fontSize: 11, fill: "#EF4444", lineHeight: 26 },
-        });
-        verdict.anchor.set(0.5, 0);
-        verdict.x = w / 2;
-        verdict.y = cardY + 82;
-        this.endingContainer.addChild(verdict);
-
-        const desc = new Text({
-            text: "The evaluation is complete. Central Vienium has determined\nthat the two subjects demonstrated adequate survival instincts,\nquestionable communication, and suspicious coordination.\n\nThey have been issued a joint custody certificate.\nFuture interstellar travel will require triplicate paperwork.",
-            style: {
-                fontFamily: "'VT323', monospace",
-                fontSize: 20,
-                fill: "#E5E7EB",
-                lineHeight: 26,
-                align: "center",
+        this.level4 = new Level4PowerMeter({
+            app: this.app,
+            input: this.game.input,
+            soundManager: this.game.soundManager,
+            textures: this.game.textures,
+            faceTracker: this.faceTracker,
+            onComplete: () => {
+                this.changeScene("TRANSITION_4_FINAL");
             },
         });
-        desc.anchor.set(0.5, 0);
-        desc.x = w / 2;
-        desc.y = cardY + 168;
-        this.endingContainer.addChild(desc);
 
-        // Restart button
-        const btnBox = new Container();
-        const btnBg = new Graphics();
-        btnBg.roundRect(0, 0, 300, 46, 4);
-        btnBg.fill({ color: 0x1f2937 });
-        btnBg.stroke({ color: 0x38bdf8, width: 2 });
-        btnBox.addChild(btnBg);
-
-        const btnText = new Text({
-            text: "[ RE-RUN PROTOCOL ]",
-            style: { fontFamily: this.fontFamily, fontSize: 11, fill: "#38BDF8" },
-        });
-        btnText.anchor.set(0.5);
-        btnText.x = 150;
-        btnText.y = 23;
-        btnBox.addChild(btnText);
-
-        btnBox.x = (w - 300) / 2;
-        btnBox.y = cardY + cardH - 62;
-        btnBox.eventMode = "static";
-        btnBox.cursor = "pointer";
-
-        btnBox.on("pointerover", () => { btnBg.tint = 0xaabbcc; });
-        btnBox.on("pointerout", () => { btnBg.tint = 0xffffff; });
-        btnBox.on("pointertap", () => {
-            this.endingContainer.visible = false;
-            this.changeScene("LEVEL1");
-        });
-
-        this.endingContainer.addChild(btnBox);
-
-        // Siren blink animation
-        const sirenTicker = () => {
-            const t = Date.now() * 0.006;
-            siren1.alpha = (Math.sin(t) > 0) ? 0.85 : 0.2;
-            siren2.alpha = (Math.sin(t) > 0) ? 0.2 : 0.85;
-        };
-        this.app.ticker.add(sirenTicker);
-        // Store so we can remove if needed
-        this._endingSirenTicker = sirenTicker;
-
-        commentary.roast("SUBWAY_CAUGHT", {}, { force: true });
+        this.app.stage.addChild(this.level4.container);
     }
 
-    // ─── Main Update Loop ────────────────────────────────────────────────────
+    mountFinalScreen() {
+        this._destroyFinalScreen();
+
+        this.finalScreen = new FinalScreen({
+            app: this.app,
+            soundManager: this.game.soundManager,
+            textures: this.game.textures,
+            onRestart: () => {
+                this.changeScene("LEVEL1");
+            },
+        });
+
+        this.app.stage.addChild(this.finalScreen.container);
+    }
+
+    // ─── Main Game Loop Update ────────────────────────────────────────────────
 
     update(deltaTime) {
         if (this.currentScene === "LEVEL2" && this.level2) {
@@ -498,6 +452,12 @@ export class SceneManager {
         }
         if (this.currentScene === "LEVEL3" && this.level3) {
             this.level3.update(deltaTime);
+        }
+        if (this.currentScene === "LEVEL4" && this.level4) {
+            this.level4.update(deltaTime);
+        }
+        if (this.currentScene === "FINAL_SCREEN" && this.finalScreen) {
+            this.finalScreen.update(deltaTime);
         }
     }
 }

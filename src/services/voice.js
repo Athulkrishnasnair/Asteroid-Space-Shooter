@@ -112,15 +112,47 @@ class VoiceService {
         this.isSpeaking = false;
         this.lastRoastTimes = {};
         this.audioUnlocked = false;
+        this.audioCtx = null;
+
+        // Auto-unlock on first user interaction anywhere
+        if (typeof window !== "undefined") {
+            const autoUnlock = () => {
+                this.unlockAudio();
+                window.removeEventListener("pointerdown", autoUnlock);
+                window.removeEventListener("keydown", autoUnlock);
+            };
+            window.addEventListener("pointerdown", autoUnlock, { once: true, capture: true });
+            window.addEventListener("keydown", autoUnlock, { once: true, capture: true });
+        }
     }
 
     unlockAudio() {
         this.audioUnlocked = true;
-        if (this.currentAudio) {
+        try {
+            if (!this.audioCtx) {
+                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (this.audioCtx && this.audioCtx.state === "suspended") {
+                this.audioCtx.resume().catch(() => {});
+            }
+        } catch (e) {}
+
+        if (this.currentAudio && this.currentAudio.paused) {
             this.currentAudio.volume = 0.85;
             this.currentAudio.play().catch(() => {});
         }
         return true;
+    }
+
+    stopSpeaking() {
+        if (this.currentAudio) {
+            try {
+                this.currentAudio.pause();
+                this.currentAudio.currentTime = 0;
+            } catch (e) {}
+            this.currentAudio = null;
+        }
+        this.isSpeaking = false;
     }
 
     // Helper: fetch with timeout
@@ -186,9 +218,9 @@ class VoiceService {
         const normalized = text.trim();
         if (!normalized) return false;
 
+        // Auto unlock if possible
         if (!this.audioUnlocked) {
-            console.warn("Voice audio is locked until the first user interaction.");
-            return false;
+            this.unlockAudio();
         }
 
         try {
@@ -207,18 +239,18 @@ class VoiceService {
             const audioUrl = URL.createObjectURL(blob);
 
             // Stop any currently playing alien speech
-            if (this.currentAudio) {
-                this.currentAudio.pause();
-                this.currentAudio = null;
-            }
+            this.stopSpeaking();
 
             const audio = new Audio(audioUrl);
-            audio.volume = 0.85;
+            audio.volume = 0.9;
             this.currentAudio = audio;
             this.isSpeaking = true;
 
             return new Promise((resolve) => {
+                let cleaned = false;
                 const cleanup = () => {
+                    if (cleaned) return;
+                    cleaned = true;
                     this.isSpeaking = false;
                     URL.revokeObjectURL(audioUrl);
                     if (this.currentAudio === audio) {

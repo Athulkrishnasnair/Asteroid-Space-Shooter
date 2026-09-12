@@ -3,6 +3,7 @@
 // Rendered directly to the stage to remain unaffected by world camera shake.
 
 import { Container, Graphics, Text } from "pixi.js";
+import { commentary } from "../services/commentary.js";
 
 const JOKES = {
     missStreak: [
@@ -170,7 +171,25 @@ export class HUD {
         this.jokeCooldown = 0;
         this.lastJokeCategory = null;
 
+        // Register with centralized commentary manager
+        this.unsubscribeCommentary = commentary.onDialogue((text, duration) => {
+            this.showDialogue(text, duration);
+        });
+
         this.resize();
+    }
+
+    // Show dialogue box with subtitle text
+    showDialogue(text, duration = 4.0) {
+        if (!text) return;
+        this.dialogueMessage.text = `"${text}"`;
+        this.dialogueBox.visible = true;
+        this.dialogueBox.alpha = 1;
+        this.dialogueTimer = duration;
+
+        if (this.soundManager) {
+            this.soundManager.playDialogue();
+        }
     }
 
     // Adapt layout when screen dimensions change
@@ -224,7 +243,7 @@ export class HUD {
         this.objectiveText.style.fill = color;
     }
 
-    // Trigger a witty gameplay joke with cooldown and priority
+    // Trigger a witty gameplay joke with cooldown and priority, spoken via Piper
     triggerJoke(category, force = false) {
         if (!force && this.jokeCooldown > 0) return;
         const list = JOKES[category];
@@ -234,16 +253,10 @@ export class HUD {
         const joke = filtered[Math.floor(Math.random() * filtered.length)] || list[0];
         this.lastJokeText = joke;
         this.lastJokeCategory = category;
+        this.jokeCooldown = 4.5; // Cooldown between gameplay jokes
 
-        this.dialogueMessage.text = `"${joke}"`;
-        this.dialogueBox.visible = true;
-        this.dialogueBox.alpha = 1;
-        this.dialogueTimer = this.dialogueDuration;
-        this.jokeCooldown = 5.0; // 5 seconds between jokes
-
-        if (this.soundManager) {
-            this.soundManager.playDialogue();
-        }
+        // Central commentary speaks via Piper and emits to HUD subtitle
+        commentary.say(joke, { force, duration: this.dialogueDuration });
     }
 
     update(deltaTime) {
@@ -275,6 +288,14 @@ export class HUD {
         this.dialogueBox.alpha = 0;
         this.dialogueTimer = 0;
         this.jokeCooldown = 2.0;
+    }
+
+    destroy() {
+        if (this.unsubscribeCommentary) {
+            this.unsubscribeCommentary();
+            this.unsubscribeCommentary = null;
+        }
+        this.container.destroy({ children: true });
     }
 }
 

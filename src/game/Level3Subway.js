@@ -344,6 +344,8 @@ export class Level3Subway {
         this.lastRecognizedCommand = cmd;
         this.commandFeedbackTimer = 1.2;
 
+        commentary.recordStat("subwayCommands");
+
         this.cmdBadge.text = `COMMAND RECOGNIZED: [${cmd}]`;
         this.cmdBadge.style.fill = "#38BDF8";
 
@@ -580,6 +582,7 @@ export class Level3Subway {
                     if (hit) {
                         obs.passed = true;
                         if (this.soundManager) this.soundManager.playCrash();
+                        commentary.recordStat("subwayHits");
                         commentary.roast("SUBWAY_CRASH", {}, { textOnly: true });
                         // Flash red visual effect
                         this.player.sprite.alpha = 0.4;
@@ -621,6 +624,7 @@ export class Level3Subway {
     triggerCaptureEnding() {
         this.captureTriggered = true;
         console.log("LEVEL 3 CAPTURED BY CENTRAL VIENIUM TRANSIT POLICE!");
+        commentary.setStat("subwayDistance", this.player.score);
 
         // Spawn Police Cruiser dropping in from above
         this.policeShip = new Container();

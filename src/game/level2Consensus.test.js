@@ -33,6 +33,7 @@ test('disagreement stops briefly even when one side is valid', () => {
   });
 
   assert.equal(result.action, 'STOP');
+  assert.equal(result.isDisagreed, true);
 });
 
 test('last command persists briefly after one player disappears', () => {
@@ -50,4 +51,36 @@ test('last command persists briefly after one player disappears', () => {
 
   assert.equal(result.direction, 'LEFT');
   assert.equal(result.action, 'MOVE');
+});
+
+test('hold latch maintains direction when one player briefly returns to center', () => {
+  const result = resolveDirectionalCommand({
+    p1Dir: 'LEFT',
+    p2Dir: 'CENTER',
+    p1Visible: true,
+    p2Visible: true,
+    history: ['LEFT', 'LEFT'],
+    previousCommand: 'LEFT',
+    now: 300,
+    holdUntil: 600, // hold window active
+  });
+
+  assert.equal(result.direction, 'LEFT');
+  assert.equal(result.action, 'MOVE');
+  assert.equal(result.holdActive, true);
+});
+
+test('single player detected allows steering fallback for solo demo', () => {
+  const result = resolveDirectionalCommand({
+    p1Dir: 'RIGHT',
+    p2Dir: 'CENTER',
+    p1Visible: true,
+    p2Visible: false,
+    history: ['RIGHT'],
+    now: 200,
+  });
+
+  assert.equal(result.direction, 'RIGHT');
+  assert.equal(result.action, 'MOVE');
+  assert.equal(result.isSolo, true);
 });

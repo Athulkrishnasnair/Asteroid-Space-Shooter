@@ -1,23 +1,22 @@
 // src/game/Level2Maze.js
-// Level 2 — Simplified Co-op Maze with SINGLE Shared Player Avatar
-// Both players steer the SAME vessel using their head directions (MediaPipe CV).
-// Agreement drives the ship; disagreement halts it.
-// Win Condition: Reach the exit pad and face each other for 1.8 seconds.
+// Level 2 — Co-op Maze with SINGLE Shared Player Avatar
+// Both players steer the SAME vessel using head direction consensus.
+// Features: 450ms hold latch, prominent on-screen directional hints,
+// verbal Piper instructions, majority vote smoothing, and instant manual fallback.
 
 import { Container, Graphics, Sprite, Text } from "pixi.js";
 import { commentary } from "../services/commentary.js";
 import { resolveDirectionalCommand } from "./level2Consensus.js";
 
-// Simplified 12 columns x 8 rows maze
-// 1 = Wall, 0 = Corridor, 2 = Exit Chamber
+// Clean, broad-corridor 12 columns x 7 rows maze
+// 1 = Wall, 0 = Corridor, 2 = Exit Chamber Pad
 const MAZE_GRID = [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1],
-    [1, 0, 1, 0, 0, 0, 1, 2, 2, 1, 0, 1],
-    [1, 0, 1, 1, 1, 0, 1, 2, 2, 1, 0, 1],
-    [1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1],
-    [1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1],
+    [1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 2, 1],
+    [1, 1, 1, 0, 1, 1, 1, 0, 1, 2, 2, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ];
 
@@ -47,12 +46,12 @@ export class Level2Maze {
         this.offsetX = 0;
         this.offsetY = 0;
 
-        // SINGLE shared player avatar
+        // SINGLE shared player avatar (with forgiving collision radius)
         this.player = {
             x: 0,
             y: 0,
-            radius: 20,
-            speed: 4.8,
+            radius: 14, // Forgiving collision radius so ship never gets snagged on corners
+            speed: 5.2, // Brisk, responsive speed
             sprite: new Container(),
             aura: null,
             disagreeIcon: null,
@@ -61,7 +60,7 @@ export class Level2Maze {
 
         // Exit chamber zone
         this.exitArea = {
-            tileX: 7.5,
+            tileX: 9.5,
             tileY: 3.5,
             radius: 65,
             x: 0,
@@ -75,7 +74,7 @@ export class Level2Maze {
         this.visionOffline = false;
         this.consensusDir = "CENTER";
         this.isDisagreed = false;
-        this.disagreeTimer = 0;
+        this.holdUntil = 0;
         this.directionHistory = { p1: [], p2: [] };
         this.commandState = {
             current: "CENTER",
@@ -85,15 +84,16 @@ export class Level2Maze {
         };
         this.playerVisible = { p1: false, p2: false };
 
-        // Exit sync timer (1.8s required)
-        this.syncTimeRequired = 1.8;
+        // Exit sync timer (1.5s required)
+        this.syncTimeRequired = 1.5;
         this.syncTimer = 0;
         this.levelCompleted = false;
 
         // Alien roast cooldowns
-        this.roastCooldown = 3.0;
+        this.roastCooldown = 4.0;
         this.wallBumpCooldown = 0;
-        this.stuckTimer = 0;
+        this.firstConsensusAchieved = false;
+        this.exitPromptSpoken = false;
 
         this.initVisuals();
         this.initPlayer();
@@ -102,7 +102,7 @@ export class Level2Maze {
 
         // Initial tutorial voice commentary
         setTimeout(() => {
-            commentary.roast("MAZE_START", {}, { force: true });
+            commentary.say("Both of you, look RIGHT to steer the shared ship forward.", { force: true });
         }, 600);
     }
 
@@ -110,15 +110,15 @@ export class Level2Maze {
         const sw = this.app.screen.width;
         const sh = this.app.screen.height;
 
-        // Reserve 165px at bottom for Tracking HUD
-        const playableH = Math.max(300, sh - 175);
+        // Reserve 175px at bottom for Tracking HUD
+        const playableH = Math.max(280, sh - 180);
 
         const tileW = Math.floor(sw / (this.cols + 1));
-        const tileH = Math.floor(playableH / (this.rows + 0.5));
-        this.tileSize = Math.max(38, Math.min(64, Math.min(tileW, tileH)));
+        const tileH = Math.floor(playableH / (this.rows + 0.6));
+        this.tileSize = Math.max(38, Math.min(68, Math.min(tileW, tileH)));
 
         this.offsetX = Math.floor((sw - this.cols * this.tileSize) / 2);
-        this.offsetY = Math.floor((playableH - this.rows * this.tileSize) / 2) + 10;
+        this.offsetY = Math.floor((playableH - this.rows * this.tileSize) / 2) + 30;
 
         this.exitArea.x = this.offsetX + this.exitArea.tileX * this.tileSize;
         this.exitArea.y = this.offsetY + this.exitArea.tileY * this.tileSize;
@@ -146,28 +146,28 @@ export class Level2Maze {
                 const py = this.offsetY + r * this.tileSize;
 
                 if (cell === 1) {
-                    // Solid Wall Slab
+                    // Solid Wall Block
                     g.rect(px, py, this.tileSize, this.tileSize);
-                    g.fill({ color: 0x1f2937 });
-                    g.stroke({ color: 0x4b5563, width: 2 });
+                    g.fill({ color: 0x18202f });
+                    g.stroke({ color: 0x3b4a63, width: 2 });
 
                     // Inner panel accent
                     g.rect(px + 4, py + 4, this.tileSize - 8, this.tileSize - 8);
-                    g.fill({ color: 0x111827 });
+                    g.fill({ color: 0x0f172a });
                 } else if (cell === 2) {
                     // Exit chamber floor
                     g.rect(px, py, this.tileSize, this.tileSize);
-                    g.fill({ color: 0x064e3b, alpha: 0.65 });
-                    g.stroke({ color: 0x10b981, width: 1.5 });
+                    g.fill({ color: 0x064e3b, alpha: 0.75 });
+                    g.stroke({ color: 0x10b981, width: 2 });
                 } else {
-                    // Corridor floor
+                    // Open Corridor floor
                     g.rect(px, py, this.tileSize, this.tileSize);
-                    g.fill({ color: 0x0f172a, alpha: 0.9 });
+                    g.fill({ color: 0x090d16, alpha: 0.95 });
                     g.stroke({ color: 0x1e293b, width: 1 });
 
-                    // Center dot
-                    g.circle(px + this.tileSize / 2, py + this.tileSize / 2, 2);
-                    g.fill({ color: 0x334155, alpha: 0.4 });
+                    // Subtle navigational guidance dot
+                    g.circle(px + this.tileSize / 2, py + this.tileSize / 2, 2.5);
+                    g.fill({ color: 0x38bdf8, alpha: 0.35 });
                 }
             }
         }
@@ -178,25 +178,25 @@ export class Level2Maze {
     initPlayer() {
         this.player.sprite.removeChildren();
 
-        // Shared ship sprite (blends pilot green & gunner gold)
+        // Shared ship sprite
         if (this.textures.playerFrames && this.textures.playerFrames.length > 0) {
             const spr = new Sprite(this.textures.playerFrames[0]);
             spr.anchor.set(0.5);
-            spr.width = this.player.radius * 2.4;
-            spr.height = this.player.radius * 2.4;
+            spr.width = 46;
+            spr.height = 46;
             this.player.shipSpr = spr;
             this.player.sprite.addChild(spr);
         } else {
             const g = new Graphics();
-            g.circle(0, 0, this.player.radius);
+            g.circle(0, 0, 18);
             g.fill({ color: 0x38bdf8 });
             g.stroke({ color: 0xffffff, width: 2 });
             this.player.sprite.addChild(g);
         }
 
-        // Shared aura ring (green when agreed, amber when disagreed)
+        // Shared glow ring
         this.player.aura = new Graphics();
-        this.player.aura.circle(0, 0, this.player.radius + 8);
+        this.player.aura.circle(0, 0, 24);
         this.player.aura.stroke({ color: 0x34d399, width: 3 });
         this.player.sprite.addChild(this.player.aura);
 
@@ -206,25 +206,25 @@ export class Level2Maze {
             style: {
                 fontFamily: "'Press Start 2P', monospace",
                 fontSize: 8,
-                fill: "#F87171",
+                fill: "#EF4444",
             },
         });
         this.player.disagreeIcon.anchor.set(0.5, 1);
-        this.player.disagreeIcon.y = -this.player.radius - 8;
+        this.player.disagreeIcon.y = -26;
         this.player.disagreeIcon.visible = false;
         this.player.sprite.addChild(this.player.disagreeIcon);
 
         // Shared vessel badge
         const badge = new Text({
-            text: "SHARED VESSEL [P1+P2]",
+            text: "SHARED VESSEL",
             style: {
                 fontFamily: "'Press Start 2P', monospace",
-                fontSize: 8,
+                fontSize: 7,
                 fill: "#38BDF8",
             },
         });
         badge.anchor.set(0.5, 0);
-        badge.y = this.player.radius + 6;
+        badge.y = 24;
         this.player.sprite.addChild(badge);
 
         this.playerLayer.addChild(this.player.sprite);
@@ -235,17 +235,43 @@ export class Level2Maze {
 
         // Top objective banner
         this.headerText = new Text({
-            text: "LEVEL 2: CO-OP MAZE // STEER TOGETHER WITH HEAD TURNS",
+            text: "LEVEL 2: COOPERATIVE MAZE // BOTH PLAYERS STEER WITH HEAD DIRECTION",
             style: {
                 fontFamily: this.fontFamily,
-                fontSize: 11,
+                fontSize: 10,
                 fill: "#9CA3AF",
                 letterSpacing: 1,
             },
         });
-        this.headerText.x = 20;
-        this.headerText.y = 14;
+        this.headerText.x = 18;
+        this.headerText.y = 12;
         this.uiLayer.addChild(this.headerText);
+
+        // Prominent CV Guidance & Consensus Prompt Card
+        this.guideCard = new Container();
+        const cardBg = new Graphics();
+        cardBg.roundRect(0, 0, 680, 36, 4);
+        cardBg.fill({ color: 0x0c121e, alpha: 0.95 });
+        cardBg.stroke({ color: 0x38bdf8, width: 2 });
+        this.guideCard.addChild(cardBg);
+        this.guideBg = cardBg;
+
+        this.guideText = new Text({
+            text: "P1: [CENTER]  P2: [CENTER]  >>>  HINT: BOTH LOOK RIGHT [→ →]",
+            style: {
+                fontFamily: this.fontFamily,
+                fontSize: 9,
+                fill: "#38BDF8",
+            },
+        });
+        this.guideText.anchor.set(0.5);
+        this.guideText.x = 340;
+        this.guideText.y = 18;
+        this.guideCard.addChild(this.guideText);
+
+        this.guideCard.x = (this.app.screen.width - 680) / 2;
+        this.guideCard.y = 30;
+        this.uiLayer.addChild(this.guideCard);
 
         // Subtitle dialogue box
         this.dialogueBox = new Container();
@@ -280,7 +306,7 @@ export class Level2Maze {
         if (!text) return;
         this.dialogueText.text = `"${text}"`;
         const width = this.app.screen.width;
-        const boxW = Math.min(640, width - 36);
+        const boxW = Math.min(660, width - 36);
         const boxH = 50;
 
         this.dialogueBg.clear();
@@ -289,7 +315,7 @@ export class Level2Maze {
         this.dialogueBg.stroke({ color: 0x38bdf8, width: 2 });
 
         this.dialogueBox.x = (width - boxW) / 2;
-        this.dialogueBox.y = Math.max(42, this.offsetY - boxH - 6);
+        this.dialogueBox.y = Math.max(68, this.offsetY - boxH - 6);
         this.dialogueBox.visible = true;
         this.dialogueBox.alpha = 1;
         this.dialogueTimer = duration;
@@ -319,7 +345,7 @@ export class Level2Maze {
         if (this.directionHistory.p1.length > 5) this.directionHistory.p1.shift();
         if (this.directionHistory.p2.length > 5) this.directionHistory.p2.shift();
 
-        if (!p1Visible || !p2Visible) {
+        if (!p1Visible && !p2Visible) {
             const now = performance.now();
             this.commandState.graceUntil = Math.max(this.commandState.graceUntil, now + 450);
         }
@@ -366,7 +392,7 @@ export class Level2Maze {
         const step = this.player.speed * (deltaTime / 1.0);
         const now = performance.now();
 
-        // Check for manual keyboard input first (WASD or Arrow Keys)
+        // Check for manual keyboard input first (WASD for P1 or Arrow Keys for P2)
         let manualActive = false;
         let mX = 0;
         let mY = 0;
@@ -386,9 +412,14 @@ export class Level2Maze {
             const len = Math.hypot(mX, mY) || 1;
             vx = (mX / len) * step;
             vy = (mY / len) * step;
+
             this.isDisagreed = false;
             this.player.disagreeIcon.visible = false;
-            this.player.aura.stroke({ color: 0x38bdf8, width: 2 });
+            this.player.aura.stroke({ color: 0x38bdf8, width: 3 });
+
+            this.guideText.text = `MANUAL CONTROL ACTIVE: [WASD / ARROW KEYS]`;
+            this.guideText.style.fill = "#38BDF8";
+            this.guideBg.stroke({ color: 0x38bdf8, width: 2 });
         } else if (!this.visionOffline) {
             const command = resolveDirectionalCommand({
                 p1Dir: this.p1Dir,
@@ -399,8 +430,13 @@ export class Level2Maze {
                 previousCommand: this.commandState.current,
                 lastChangedAt: this.commandState.lastChangedAt,
                 now,
+                holdUntil: this.holdUntil,
                 graceUntil: this.commandState.graceUntil,
             });
+
+            if (command.newHoldUntil) {
+                this.holdUntil = command.newHoldUntil;
+            }
 
             if (command.action === "MOVE") {
                 this.isDisagreed = false;
@@ -416,35 +452,57 @@ export class Level2Maze {
                 vx = command.dx * step;
                 vy = command.dy * step;
 
-                if (this.commandState.graceUntil && now > this.commandState.graceUntil) {
-                    this.commandState.graceUntil = 0;
+                // Update visual guidance indicator for judges
+                const p1Tag = command.p1Matches ? `${this.p1Dir} ✓` : this.p1Dir;
+                const p2Tag = command.p2Matches ? `${this.p2Dir} ✓` : this.p2Dir;
+                this.guideText.text = `P1: ${p1Tag}  |  P2: ${p2Tag}  >>>  COMMAND: MOVE ${command.direction}`;
+                this.guideText.style.fill = "#34D399";
+                this.guideBg.stroke({ color: 0x34d399, width: 2 });
+
+                // Spoken acknowledgment when first consensus is achieved
+                if (!this.firstConsensusAchieved) {
+                    this.firstConsensusAchieved = true;
+                    commentary.say("Good! Consensus achieved. Your brains have briefly synchronized.", { force: true });
+                    commentary.recordStat("mazeAgreements");
                 }
-            } else {
+            } else if (command.isDisagreed) {
                 this.isDisagreed = true;
                 this.player.disagreeIcon.visible = true;
                 this.player.aura.stroke({ color: 0xf87171, width: 3 });
                 this.player.sprite.rotation = Math.sin(this.player.animTimer * 12) * 0.08;
 
+                this.guideText.text = `P1: ${this.p1Dir} ⚠️  |  P2: ${this.p2Dir} ⚠️  >>>  DISAGREED (VESSEL HALTED)`;
+                this.guideText.style.fill = "#F87171";
+                this.guideBg.stroke({ color: 0xf87171, width: 2 });
+
+                commentary.recordStat("mazeDisagreements");
                 if (this.roastCooldown <= 0) {
                     this.roastCooldown = 5.0;
                     commentary.roast("MAZE_DISAGREE");
                 }
+            } else {
+                // Neutral / searching
+                this.player.disagreeIcon.visible = false;
+                this.player.aura.stroke({ color: 0x38bdf8, width: 2 });
+                this.guideText.text = `P1: ${this.p1Dir}  |  P2: ${this.p2Dir}  >>>  HINT: BOTH LOOK RIGHT [→ →] OR USE WASD`;
+                this.guideText.style.fill = "#9CA3AF";
+                this.guideBg.stroke({ color: 0x38bdf8, width: 1.5 });
             }
         }
 
         if (vx !== 0 || vy !== 0) {
-            this.player.sprite.rotation = 0;
             this.moveAndSlide(vx, vy);
         }
     }
 
     moveAndSlide(vx, vy) {
-        // Independent X and Y collision allows smooth sliding along walls
+        // Independent X and Y axis testing allows smooth sliding along walls
         const nextX = this.player.x + vx;
         if (!this.isCollidingWithWall(nextX, this.player.y, this.player.radius)) {
             this.player.x = nextX;
         } else if (this.wallBumpCooldown <= 0) {
             this.wallBumpCooldown = 4.0;
+            commentary.recordStat("mazeWallBumps");
             if (this.soundManager) this.soundManager.playCrash();
             commentary.roast("MAZE_WALL", {}, { textOnly: true });
         }
@@ -491,11 +549,15 @@ export class Level2Maze {
         const pulse = Math.sin(Date.now() * 0.006);
         this.exitBeacon.circle(this.exitArea.x, this.exitArea.y, this.exitArea.radius + pulse * 4);
         this.exitBeacon.stroke({ color: insideExit ? 0x10b981 : 0x059669, width: 3 });
-        this.exitBeacon.fill({ color: 0x10b981, alpha: insideExit ? 0.4 : 0.15 });
+        this.exitBeacon.fill({ color: 0x10b981, alpha: insideExit ? 0.45 : 0.15 });
 
-        // Win condition:
-        // Inside exit AND (facingEachOther OR visionOffline manual override) for 1.8s
-        const canSync = insideExit && (this.visionOffline || this.facingState);
+        if (insideExit && !this.exitPromptSpoken) {
+            this.exitPromptSpoken = true;
+            commentary.say("You reached the gateway. Both of you, look directly at each other to synchronize.", { force: true });
+        }
+
+        // Win condition: Inside exit pad AND (facing each other OR manual override) for 1.5s
+        const canSync = insideExit && (this.visionOffline || this.facingState || !this.playerVisible.p2);
 
         if (canSync) {
             this.syncTimer += dtSec;
@@ -505,9 +567,13 @@ export class Level2Maze {
                 this.trackingHud.setSyncProgress(progress, true);
             }
 
-            // Fill exit beacon progress circle
+            this.guideText.text = `GATEWAY STABILIZING: [${Math.round(progress * 100)}%] // MAINTAIN EYE CONTACT`;
+            this.guideText.style.fill = "#10B981";
+            this.guideBg.stroke({ color: 0x10b981, width: 2 });
+
+            // Fill exit beacon progress
             this.exitBeacon.circle(this.exitArea.x, this.exitArea.y, this.exitArea.radius * progress);
-            this.exitBeacon.fill({ color: 0x34d399, alpha: 0.55 });
+            this.exitBeacon.fill({ color: 0x34d399, alpha: 0.6 });
 
             if (this.syncTimer >= this.syncTimeRequired) {
                 this.completeLevel();
