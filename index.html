@@ -1,13 +1,222 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>alien-game</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>CENTRAL VIENIUM // CUSTODY PROTOCOL</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+
+  <!-- ===================================================================
+       INTRO / TRANSMISSION LAYER
+       Pure DOM + CSS + JS. Removed entirely once gameplay starts.
+       See src/style.js for behavior, src/style.css for visuals.
+  ==================================================================== -->
+  <div id="intro" class="intro">
+
+    <canvas id="starfield" class="intro__stars"></canvas>
+    <div class="intro__vignette" aria-hidden="true"></div>
+    <div class="intro__scanlines" aria-hidden="true"></div>
+    <div class="intro__noise" aria-hidden="true"></div>
+
+    <!-- persistent HUD strip, in-universe flavor info -->
+    <aside class="hud" id="hud" hidden>
+      <div class="hud__row"><span class="hud__label">SECTOR</span><span class="hud__value">CV-07</span></div>
+      <div class="hud__row"><span class="hud__label">THREAT</span><span class="hud__value hud__value--danger">EXTREME</span></div>
+      <div class="hud__row"><span class="hud__label">VESSEL</span><span class="hud__value">UNREGISTERED</span></div>
+      <div class="hud__row"><span class="hud__label">AUTHORITY</span><span class="hud__value hud__value--brass">CENTRAL VIENIUM</span></div>
+      <div class="hud__row"><span class="hud__label">PROTOCOL</span><span class="hud__value">CUSTODY-07</span></div>
+    </aside>
+
+    <!-- placeholder vessel, swapped for real sprite later (see style.js ASSET_PATHS) -->
+    <div class="placeholder-ship" id="placeholder-ship" aria-hidden="true" hidden>
+      <div class="placeholder-ship__hull"></div>
+      <div class="placeholder-ship__engine"></div>
+    </div>
+
+    <!-- landing title and alien teaser panel -->
+    <div class="landing-hero" id="landing-hero">
+      <div class="landing-badge-strip">
+        <span class="status-chip status-chip--vision">● VISION: STANDBY</span>
+        <span class="status-chip status-chip--voice">● VOICE: STANDBY</span>
+        <span class="status-chip status-chip--ai">● ALIEN: ONLINE</span>
+      </div>
+
+      <h1 class="landing-title">CENTRAL VIENIUM</h1>
+      <h2 class="landing-subtitle">COUPLE COMPATIBILITY PROTOCOL // EVALUATION SUITE</h2>
+
+      <div class="landing-alien-box pixel-border">
+        <div class="landing-alien-box__header">
+          <span>ALIEN SURVEILLANCE FEED // SECTOR CV-07</span>
+          <span class="panel__rec"><i class="panel__rec-dot"></i>LIVE</span>
+        </div>
+        <div class="landing-alien-box__body">
+          <p class="landing-alien-dialogue" id="landing-alien-text">"Ah. Two humans. Central Vienium has reviewed your application. Unfortunately, your application is suspicious. Proceed."</p>
+        </div>
+      </div>
+
+      <button class="decree-btn decree-btn--start pixel-border" id="btn-start-mission" type="button">
+        <span class="decree-btn__label">[  INITIALIZE ALIEN AUDIO &amp; START  ]</span>
+        <span class="decree-btn__desc">Authorize Central Vienium observation &amp; custody evaluation.</span>
+      </button>
+    </div>
+
+    <!-- signal acquisition sequence -->
+    <div class="signal" id="signal" hidden>
+      <p class="signal__line" id="signal-line-1">INCOMING TRANSMISSION</p>
+      <p class="signal__line" id="signal-line-2">DECODING&hellip;</p>
+      <p class="signal__line" id="signal-line-3">SIGNAL LOCKED</p>
+    </div>
+
+
+    <!-- main transmission / dialogue panel -->
+    <div class="panel pixel-border" id="dialogue-panel" hidden>
+      <div class="panel__header">
+        <span>TRANSMISSION // ORIGIN UNKNOWN</span>
+        <span class="panel__rec"><i class="panel__rec-dot"></i>REC</span>
+      </div>
+      <div class="panel__body">
+        <p class="dialogue" id="dialogue-text" aria-live="polite"></p>
+      </div>
+      <div class="panel__footer">
+        <span class="prompt" id="advance-prompt">CLICK OR PRESS SPACE TO CONTINUE ▸</span>
+      </div>
+    </div>
+
+    <!-- decree / choice panel -->
+    <div class="choice" id="choice-panel" hidden>
+      <h2 class="choice__title">YOU HAVE TWO OPTIONS</h2>
+      <div class="choice__options">
+        <button class="decree-btn decree-btn--surrender pixel-border" id="btn-surrender" type="button">
+          <span class="decree-btn__label">SURRENDER</span>
+          <span class="decree-btn__desc">Accept your completely unnecessary custody.</span>
+        </button>
+        <button class="decree-btn decree-btn--fight pixel-border" id="btn-fight" type="button">
+          <span class="decree-btn__label">FIGHT</span>
+          <span class="decree-btn__desc">Challenge the superior forces of Central Vienium.</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- bottom-left utility bar: reference panels, available once transmission starts -->
+    <div class="utility-bar" id="utility-bar" hidden>
+      <button class="util-btn" id="open-database" type="button">SHIP RECORD</button>
+      <button class="util-btn" id="open-controls" type="button">CONTROLS</button>
+    </div>
+
+    <!-- vessel database modal -->
+    <div class="modal-veil" id="database-modal" hidden>
+      <div class="modal pixel-border" role="dialog" aria-modal="true" aria-labelledby="database-title">
+        <div class="modal__header">
+          <span id="database-title">SHIP RECORD // VEE-1</span>
+          <button class="modal__close" id="close-database" type="button" aria-label="Close ship record">&times;</button>
+        </div>
+        <div class="modal__body">
+          <section class="record-block">
+            <h3>Identification</h3>
+            <dl class="record-grid">
+              <dt>MODEL</dt><dd>VEE-1</dd>
+              <dt>CLASS</dt><dd>LIGHT INTERCEPTOR</dd>
+              <dt>REGISTRATION</dt><dd>UNKNOWN</dd>
+              <dt>ORIGIN</dt><dd>UNKNOWN</dd>
+              <dt>STATUS</dt><dd class="record-status">ACTIVE</dd>
+              <dt>CREW</dt><dd>2</dd>
+              <dt>THREAT RATING</dt><dd>UNDETERMINED</dd>
+            </dl>
+          </section>
+
+          <section class="record-block">
+            <h3>Vessel Description</h3>
+            <p>The VEE-1 is a compact two-seat civilian interceptor originally designed for short-range exploration and emergency evacuation.</p>
+            <p>Its compact frame makes it surprisingly maneuverable, although its engineers apparently considered installing proper armor an optional feature.</p>
+            <p>The vessel currently carries two unauthorized occupants and has entered Central Vienium airspace without clearance.</p>
+          </section>
+
+          <section class="record-block">
+            <h3>Technical Specifications</h3>
+            <dl class="record-grid">
+              <dt>LENGTH</dt><dd>6.2M</dd>
+              <dt>MASS</dt><dd>1.4 TONS</dd>
+              <dt>PROPULSION</dt><dd>ION THRUSTER, MK-I</dd>
+              <dt>SHIELDING</dt><dd>NONE ON RECORD</dd>
+              <dt>ARMAMENT</dt><dd>UNCONFIRMED, LIKELY MAKESHIFT</dd>
+            </dl>
+          </section>
+
+          <section class="record-block">
+            <h3>Current Status</h3>
+            <p>Vessel is airborne within restricted Sector CV-07. Custody has been declared but not yet enforced pending routine paperwork review.</p>
+          </section>
+
+          <section class="record-block">
+            <h3>Known Modifications</h3>
+            <ul class="record-list">
+              <li>Aftermarket weapon mount, origin unlicensed</li>
+              <li>Non-standard thruster tuning, cause of erratic flight pattern</li>
+              <li>Cockpit reinforcement, cosmetic only</li>
+            </ul>
+          </section>
+
+          <section class="record-block">
+            <h3>Crew</h3>
+            <dl class="record-grid">
+              <dt>OCCUPANT 1</dt><dd>UNIDENTIFIED — PILOT</dd>
+              <dt>OCCUPANT 2</dt><dd>UNIDENTIFIED — GUNNER</dd>
+            </dl>
+          </section>
+
+          <section class="record-block">
+            <h3>Incident Log</h3>
+            <ul class="record-list record-list--log">
+              <li><span class="record-list__tag">00:41</span> Unregistered vessel detected entering CV-07.</li>
+              <li><span class="record-list__tag">00:52</span> Hailing frequency ignored by vessel.</li>
+              <li><span class="record-list__tag">01:03</span> Custody order filed in triplicate.</li>
+              <li><span class="record-list__tag">01:04</span> Triplicate misplaced. Refiled.</li>
+              <li><span class="record-list__tag">01:15</span> Interception authorized.</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- control scheme modal -->
+    <div class="modal-veil" id="controls-modal" hidden>
+      <div class="modal modal--narrow pixel-border" role="dialog" aria-modal="true" aria-labelledby="controls-title">
+        <div class="modal__header">
+          <span id="controls-title">CONTROL SCHEME</span>
+          <button class="modal__close" id="close-controls" type="button" aria-label="Close control scheme">&times;</button>
+        </div>
+        <div class="modal__body">
+          <section class="record-block">
+            <h3>Player 1 Flight</h3>
+            <dl class="record-grid record-grid--controls">
+              <dt>W / A</dt><dd>UP / LEFT</dd>
+              <dt>↓ / →</dt><dd>DOWN / RIGHT</dd>
+            </dl>
+          </section>
+          <section class="record-block">
+            <h3>Weapons & Systems</h3>
+            <dl class="record-grid record-grid--controls">
+              <dt>L-CLICK</dt><dd>FIRE (MOUSE AIM)</dd>
+              <dt>R-CLICK</dt><dd>ION BOOST</dd>
+            </dl>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div class="fade-veil" id="fade-veil" aria-hidden="true"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
 </html>
