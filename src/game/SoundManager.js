@@ -10,6 +10,11 @@ import sfxGoldSpawn from "../assets/8-16bit+Sound+assets+(x25)/sfx pack/Balloon 
 import sfxGoldHit from "../assets/8-16bit+Sound+assets+(x25)/sfx pack/Boss hit 1.wav";
 import sfxLevelComplete from "../assets/8-16bit+Sound+assets+(x25)/sfx pack/Balloon ride 1.wav";
 import sfxDialogue from "../assets/8-16bit+Sound+assets+(x25)/sfx pack/Text 1.wav";
+import sfxJump from "../assets/8-16bit+Sound+assets+(x25)/sfx pack/Balloon Pop 1.wav";
+import sfxDuck from "../assets/8-16bit+Sound+assets+(x25)/sfx pack/Suck 1V2.wav";
+import sfxCrash from "../assets/8-16bit+Sound+assets+(x25)/sfx pack/Block Break 1.wav";
+import sfxSelect from "../assets/8-16bit+Sound+assets+(x25)/sfx pack/Confirm 1.wav";
+import sfxCancel from "../assets/8-16bit+Sound+assets+(x25)/sfx pack/Cancel 1.wav";
 
 export class SoundManager {
     constructor() {
@@ -27,7 +32,13 @@ export class SoundManager {
             goldHit: { src: sfxGoldHit, volume: 0.6, minInterval: 200 },
             levelComplete: { src: sfxLevelComplete, volume: 0.65, minInterval: 500 },
             dialogue: { src: sfxDialogue, volume: 0.25, minInterval: 80 },
+            jump: { src: sfxJump, volume: 0.45, minInterval: 120 },
+            duck: { src: sfxDuck, volume: 0.45, minInterval: 120 },
+            crash: { src: sfxCrash, volume: 0.55, minInterval: 150 },
+            select: { src: sfxSelect, volume: 0.4, minInterval: 100 },
+            cancel: { src: sfxCancel, volume: 0.4, minInterval: 100 },
         };
+
 
         this.initPools();
         this.bindUnlock();
@@ -138,5 +149,26 @@ export class SoundManager {
     playDialogue() {
         this.play("dialogue");
     }
+
+    playJump() {
+        this.play("jump");
+    }
+
+    playDuck() {
+        this.play("duck");
+    }
+
+    playCrash() {
+        this.play("crash");
+    }
+
+    playSelect() {
+        this.play("select");
+    }
+
+    playCancel() {
+        this.play("cancel");
+    }
 }
+
 

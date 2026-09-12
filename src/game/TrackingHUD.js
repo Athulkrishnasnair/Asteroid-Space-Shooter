@@ -122,9 +122,9 @@ export class TrackingHUD {
             this.statusText.textContent = "VISION: OFFLINE (MANUAL MODE)";
             this.statusText.className = "tracking-hud__vision-state tracking-hud__vision-state--offline";
             this.facingBadge.className = "tracking-facing tracking-facing--offline";
-            this.facingText.textContent = "VISION OFFLINE — MANUAL OVERRIDE ACTIVE";
-            this.p1Status.textContent = "MANUAL MODE";
-            this.p2Status.textContent = "MANUAL MODE";
+            this.facingText.textContent = "VISION LINK UNSTABLE — MANUAL NAVIGATION ENABLED";
+            this.p1Status.textContent = "MANUAL";
+            this.p2Status.textContent = "MANUAL";
             return;
         }
 
@@ -153,18 +153,25 @@ export class TrackingHUD {
             this.p2Status.className = "tracking-card__status tracking-card__status--lost";
         }
 
-        // Update Facing State
+        // Update Consensus / Facing State
         if (results.facingEachOther) {
             this.facingBadge.className = "tracking-facing tracking-facing--active";
-            this.facingText.textContent = "◉ FACING EACH OTHER // CO-OP BOOST ACTIVE";
+            this.facingText.textContent = "◉ MUTUAL EYE CONTACT // GATEWAY SYNCHRONIZING";
+        } else if (results.agreedDirection === "DISAGREED") {
+            this.facingBadge.className = "tracking-facing tracking-facing--warning";
+            this.facingText.textContent = `▲ DISAGREEMENT: STOPPED [P1: ${results.player1.direction || "?"} | P2: ${results.player2.direction || "?"}]`;
+        } else if (results.agreedDirection && results.agreedDirection !== "CENTER") {
+            this.facingBadge.className = "tracking-facing tracking-facing--active";
+            this.facingText.textContent = `◉ CONSENSUS: [${results.agreedDirection}] // STEERING SHARED VESSEL`;
         } else if (results.faceCount < 2) {
             this.facingBadge.className = "tracking-facing tracking-facing--searching";
-            this.facingText.textContent = "◎ POSITION BOTH PLAYERS IN CAMERA VIEW";
+            this.facingText.textContent = "◎ POSITION BOTH PLAYERS IN WEBCAM VIEW";
         } else {
-            this.facingBadge.className = "tracking-facing tracking-facing--warning";
-            this.facingText.textContent = "▲ LOOK TOWARD YOUR PARTNER";
+            this.facingBadge.className = "tracking-facing tracking-facing--searching";
+            this.facingText.textContent = "● TURN HEADS TOGETHER TO STEER (OR USE WASD / ARROWS)";
         }
     }
+
 
     setSyncProgress(progress, visible = true) {
         this.syncProgress = Math.max(0, Math.min(1, progress));

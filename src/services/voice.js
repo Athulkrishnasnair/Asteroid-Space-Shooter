@@ -37,7 +37,20 @@ const LOCAL_FALLBACK_ROASTS = {
     ],
     MAZE_START: [
         "Welcome to the relationship maze. Try not to get lost immediately.",
-        "Cooperative evaluation grid active. Eye contact is now mandatory.",
+        "Cooperative evaluation grid active. One ship, two heads. Try to agree.",
+    ],
+    MAZE_DISAGREE: [
+        "Left. No, right. Excellent teamwork.",
+        "Your navigation committee has failed to reach consensus.",
+        "The vessel has stopped because you two cannot agree on a direction.",
+    ],
+    MAZE_AGREE: [
+        "Interesting. You coordinated for three seconds.",
+        "Consensus achieved! The laws of physics are pleasantly surprised.",
+    ],
+    MAZE_WALL: [
+        "Wall detected. Strategy questionable.",
+        "The maze is not difficult. Your communication is.",
     ],
     FACING_GOOD: [
         "Remarkable. Both test subjects are acknowledging each other's existence.",
@@ -57,9 +70,26 @@ const LOCAL_FALLBACK_ROASTS = {
         "The walls do not move. You, however, are not moving either.",
     ],
     MAZE_COMPLETE: [
-        "Against all available evidence, cooperation has occurred.",
-        "Custody evaluation finished. You are legally allowed to tolerate each other.",
+        "Against all available evidence, you coordinated.",
+        "Central Vienium is deeply confused. Mission accepted.",
     ],
+    SUBWAY_START: [
+        "Congratulations. You escaped the maze. Unfortunately, you are now under arrest!",
+        "Welcome to the Central Vienium Transit Authority. Run.",
+    ],
+    SUBWAY_VOICE: [
+        "Voice command recognized. Try not to scream.",
+        "Decent vocal projection. Now dodge the next obstacle.",
+    ],
+    SUBWAY_ESCALATE: [
+        "Transit speed increasing. Please remain calm.",
+        "You appear to be improving... I dislike this development.",
+    ],
+    SUBWAY_CAUGHT: [
+        "Enough. Central Vienium Transit Police has intercepted the runners.",
+        "Custody enforced! That was an admirable sprint, humans.",
+    ],
+
     PLAYER_DOWN: [
         "Central Vienium is reconsidering your recruitment.",
         "That could have gone better. Substantially better.",
@@ -271,6 +301,144 @@ class VoiceService {
         }
         return "";
     }
+
+    // Start live command listening for Level 3 Subway Pursuit
+    // Supports Whisper via backend + optional Web Speech API + Web Audio API loudness/amplitude
+    startCommandRecognition({ onCommand, onVolume, onError }) {
+        this.stopCommandRecognition();
+
+        let active = true;
+        let audioContext = null;
+        let analyser = null;
+        let stream = null;
+        let recognition = null;
+        let volumeRaf = null;
+
+        const normalizeCommand = (text) => {
+            if (!text || typeof text !== "string") return null;
+            const lower = text.toLowerCase();
+            if (lower.includes("left")) return "LEFT";
+            if (lower.includes("right")) return "RIGHT";
+            if (lower.includes("jump") || lower.includes("hop") || lower.includes("up") || lower.includes("leap")) return "JUMP";
+            if (lower.includes("duck") || lower.includes("down") || lower.includes("slide") || lower.includes("crouch")) return "DUCK";
+            return null;
+        };
+
+        // 1. Set up Web Audio API for RMS loudness
+        navigator.mediaDevices.getUserMedia({ audio: true }).then((micStream) => {
+            if (!active) {
+                micStream.getTracks().forEach((t) => t.stop());
+                return;
+            }
+            stream = micStream;
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            const checkVolume = () => {
+                if (!active) return;
+                analyser.getByteFrequencyData(dataArray);
+                let sum = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                    sum += dataArray[i];
+                }
+                const avg = sum / dataArray.length;
+                const normalizedVol = Math.min(1.0, avg / 128.0);
+                if (typeof onVolume === "function") {
+                    onVolume(normalizedVol);
+                }
+                volumeRaf = requestAnimationFrame(checkVolume);
+            };
+            checkVolume();
+
+            // 2. Set up continuous short-clip recorder for Whisper
+            const recorder = new MediaRecorder(stream);
+            let chunks = [];
+            recorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) chunks.push(e.data);
+            };
+            recorder.onstop = async () => {
+                if (!active || chunks.length === 0) return;
+                const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+                chunks = [];
+                // Transcribe with Whisper
+                const transcript = await this.transcribeAudio(blob);
+                const cmd = normalizeCommand(transcript);
+                if (cmd && typeof onCommand === "function") {
+                    onCommand(cmd, transcript);
+                }
+                // Cycle short clip recording
+                if (active && recorder.state === "inactive") {
+                    try {
+                        recorder.start();
+                        setTimeout(() => {
+                            if (active && recorder.state === "recording") recorder.stop();
+                        }, 1200);
+                    } catch (e) {}
+                }
+            };
+
+            recorder.start();
+            setTimeout(() => {
+                if (active && recorder.state === "recording") recorder.stop();
+            }, 1200);
+
+            // 3. Local Web Speech API recognition complement
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRec) {
+                recognition = new SpeechRec();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = "en-US";
+                recognition.onresult = (evt) => {
+                    for (let i = evt.resultIndex; i < evt.results.length; i++) {
+                        const transcript = evt.results[i][0].transcript;
+                        const cmd = normalizeCommand(transcript);
+                        if (cmd && typeof onCommand === "function") {
+                            onCommand(cmd, transcript);
+                        }
+                    }
+                };
+                recognition.onerror = () => {};
+                recognition.onend = () => {
+                    if (active) {
+                        try { recognition.start(); } catch (e) {}
+                    }
+                };
+                try { recognition.start(); } catch (e) {}
+            }
+        }).catch((err) => {
+            console.warn("Microphone listening failed or permission denied:", err);
+            if (typeof onError === "function") onError(err);
+        });
+
+        this._commandCleanup = () => {
+            active = false;
+            if (volumeRaf) cancelAnimationFrame(volumeRaf);
+            if (recognition) {
+                try { recognition.stop(); } catch (e) {}
+            }
+            if (audioContext && audioContext.state !== "closed") {
+                audioContext.close();
+            }
+            if (stream) {
+                stream.getTracks().forEach((t) => t.stop());
+            }
+        };
+
+        return this._commandCleanup;
+    }
+
+    stopCommandRecognition() {
+        if (typeof this._commandCleanup === "function") {
+            this._commandCleanup();
+            this._commandCleanup = null;
+        }
+    }
 }
 
 export const voice = new VoiceService();
+

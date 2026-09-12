@@ -181,12 +181,23 @@ function wireModal({ openBtn, modalEl, closeBtn }) {
   return { open, close, isOpen: () => !modalEl.hidden };
 }
 
+const LANDING_REMARKS = [
+  "Ah. Two humans. Your compatibility evaluation has been scheduled.",
+  "Scanning emotional synchronization... Suspicious levels of confidence detected.",
+  "Two players. One spaceship. Highly questionable tactical decisions.",
+  "Central Vienium recommends trying not to embarrass yourselves immediately.",
+  "I have absolutely no confidence in this cooperation.",
+];
+
 // ---------------------------------------------------------------------
 // Main sequence
 // ---------------------------------------------------------------------
 export async function startIntro({ onComplete }) {
   const intro = qs("intro");
   const starfieldCanvas = qs("starfield");
+  const landingHero = qs("landing-hero");
+  const landingAlienText = qs("landing-alien-text");
+  const btnStartMission = qs("btn-start-mission");
   const signal = qs("signal");
   const hud = qs("hud");
   const dialoguePanel = qs("dialogue-panel");
@@ -212,6 +223,24 @@ export async function startIntro({ onComplete }) {
     closeBtn: qs("close-controls"),
   });
 
+  // Rotate alien landing remarks
+  let remarkIdx = 0;
+  const remarkInterval = setInterval(() => {
+    if (!landingAlienText || landingHero.hidden) return;
+    remarkIdx = (remarkIdx + 1) % LANDING_REMARKS.length;
+    landingAlienText.textContent = `"${LANDING_REMARKS[remarkIdx]}"`;
+  }, 4200);
+
+  // Wait for user to click START MISSION
+  await new Promise((resolve) => {
+    btnStartMission.addEventListener("click", () => {
+      clearInterval(remarkInterval);
+      landingHero.style.display = "none";
+      signal.hidden = false;
+      resolve();
+    }, { once: true });
+  });
+
   // 1. Signal acquisition
   const signalLines = [qs("signal-line-1"), qs("signal-line-2"), qs("signal-line-3")];
   for (const line of signalLines) {
@@ -223,6 +252,7 @@ export async function startIntro({ onComplete }) {
   signal.style.display = "none";
   hud.hidden = false;
   utilityBar.hidden = false;
+
 
   // 2. Dialogue part 1
   dialoguePanel.hidden = false;

@@ -286,8 +286,33 @@ FALLBACK_ROASTS = {
 
     "MAZE_START": [
         "Welcome to the relationship maze. Try not to get lost immediately.",
-        "Entering cooperative evaluation grid. Eye contact is now mandatory.",
-        "Two humans enter. Hopefully two humans exit with working teamwork.",
+        "Cooperative evaluation grid active. One ship, two heads. Try to agree.",
+        "Both players must look the same direction to steer. Disagreements will halt the vessel.",
+    ],
+
+    "MAZE_DISAGREE": [
+        "Left. No, right. Excellent teamwork.",
+        "Your navigation committee has failed to reach consensus.",
+        "One of you is clearly operating on a different operating system.",
+        "The vessel has stopped because you two cannot agree on a direction.",
+    ],
+
+    "MAZE_AGREE": [
+        "Interesting. You coordinated for three seconds.",
+        "Consensus achieved! The laws of physics are pleasantly surprised.",
+        "You are both looking in the same direction. Progress.",
+    ],
+
+    "MAZE_WALL": [
+        "Wall detected. Strategy questionable.",
+        "I have seen asteroids navigate better than this.",
+        "The maze is not difficult. Your communication is.",
+    ],
+
+    "MAZE_STUCK": [
+        "This maze is not exactly advanced alien architecture.",
+        "The walls do not move. You, however, are not moving either.",
+        "Navigation assistance is not available under current budget constraints.",
     ],
 
     "FACING_GOOD": [
@@ -299,27 +324,45 @@ FALLBACK_ROASTS = {
     "FACING_WRONG": [
         "Perhaps looking at your teammate would be useful.",
         "Your partner is over there. Just saying.",
-        "The alien recommends turning toward each other before you run into a wall.",
+        "The alien recommends turning toward each other before hitting a wall.",
         "Your teamwork has entered experimental territory.",
     ],
 
     "FACE_LOST": [
         "I appear to have misplaced one human. Did someone wander off?",
-        "Player tracking interrupted. Please remain in visual range.",
+        "Player tracking interrupted. Please return to observation range.",
         "Central Vienium observation lost visual on one crew member.",
     ],
 
-    "MAZE_STUCK": [
-        "This maze is not exactly advanced alien architecture.",
-        "The walls do not move. You, however, are not moving either.",
-        "Navigation assistance is not available under current budget constraints.",
+    "MAZE_COMPLETE": [
+        "Against all available evidence, you coordinated.",
+        "Central Vienium is deeply confused. Mission accepted.",
+        "Custody evaluation finished. You are legally allowed to tolerate each other.",
     ],
 
-    "MAZE_COMPLETE": [
-        "Against all available evidence, cooperation has occurred.",
-        "Custody evaluation finished. You are legally allowed to tolerate each other.",
-        "Relationship protocol satisfied. Central Vienium certifies your survival.",
+    "SUBWAY_START": [
+        "Congratulations. You escaped the maze. Unfortunately, you are now under arrest!",
+        "Welcome to the Central Vienium Transit Authority. Run.",
+        "Say your commands clearly: LEFT, RIGHT, JUMP, DUCK. Or use keyboard override.",
     ],
+
+    "SUBWAY_VOICE": [
+        "Voice command recognized. Try not to scream.",
+        "Loud and chaotic. Approved by transit dispatch.",
+        "Decent vocal projection. Now dodge the next obstacle.",
+    ],
+
+    "SUBWAY_ESCALATE": [
+        "Transit speed increasing. Please remain calm.",
+        "You appear to be improving... I dislike this development.",
+        "Warning: Velocity has exceeded standard municipal bylaws.",
+    ],
+
+    "SUBWAY_CAUGHT": [
+        "Enough. Central Vienium Transit Police has intercepted the runners.",
+        "Custody enforced! That was an admirable sprint, humans.",
+    ],
+
 
     "PLAYER_DOWN": [
         "Central Vienium is reconsidering your recruitment.",
