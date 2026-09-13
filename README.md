@@ -145,6 +145,8 @@ stateDiagram-v2
 *Central Vienium officially begins the completely unnecessary process of determining whether two humans are compatible enough to survive an alien evaluation.*
 
 ![Level 1 - Space Survival](screenshots/sp.png)
+
+*Note: W is for forward A is for Left, Down arrow is for down and Right arrow is for right. *
 *Two players attempt to survive a spaceship full of aliens. This solves the extremely important problem of determining who is better at pressing buttons while being attacked by pixel aliens.*
 
 ![Level 2 - Cooperative Maze](screenshots/cv.png)
