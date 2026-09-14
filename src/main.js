@@ -24,7 +24,12 @@ const sceneManager = new SceneManager({
 // Start camera/tracking and verify backend early during intro
 faceTracker.start();
 voice.checkHealth().then((online) => {
-    console.log(`[Alien Game] Central Vienium Backend is ${online ? "ONLINE" : "OFFLINE (Local Fallback Active)"}`);
+    const status = online
+        ? "ONLINE"
+        : import.meta.env.DEV
+            ? "OFFLINE (Local Fallback Active)"
+            : "OFFLINE";
+    console.log(`[Alien Game] Central Vienium Backend is ${status}`);
 });
 
 // Intro transmission leads directly into Pixi gameplay

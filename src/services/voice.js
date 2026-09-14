@@ -2,7 +2,11 @@
 // Centralized service for Flask backend communication (Whisper, Piper, AI roasts).
 // Designed for high resilience: never freezes the Pixi ticker or crashes if backend is offline.
 
-const BACKEND_URL = "http://localhost:5000";
+const BACKEND_URL = import.meta.env.VITE_API_URL || (
+    import.meta.env.DEV
+        ? "http://localhost:5000"
+        : "https://central-vienium.onrender.com"
+);
 const REQUEST_TIMEOUT_MS = 5000;
 
 // Local fallback roasts matching Central Vienium comedic style
